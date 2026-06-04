@@ -612,6 +612,9 @@ Once bootstrapped, logs from the package will appear at the following levels:
 | `error` | `FirestoreConfig` (missing projectId), `FirestoreDocumentParser` (decode/encode failures) |
 
 ## Architecture
+
+```
+FirestoreRestDocuments/
 ├── FirestoreDocument        # Unified async API (config + network + decode + batch)
 ├── FirestoreConfig          # Project, database, auth configuration
 ├── FirestoreDocumentParser  # Local parsing/encoding (no networking)
