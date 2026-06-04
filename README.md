@@ -12,6 +12,7 @@ Parse Firestore documents directly from the [Firestore REST API](https://firebas
 - **All Firestore value types** — string, integer, double, boolean, map, array, timestamp, geo point, reference, bytes, null
 - **Property wrappers** — `@DocumentID`, `@ServerTimestamp`, `@ExplicitNull` (same API as the Firebase iOS SDK)
 - **Encoding** — encode Swift models back to Firestore REST wire format
+- **Batch operations** — `batchGet`, `commit`, `batchWrite` with typed overloads and a `FirestoreBatch` builder
 - **Zero dependencies** for the base library; optional `swift-dependencies` integration via separate product
 
 ## Installation
@@ -267,6 +268,138 @@ let fields = try parser.encodeAsFieldsDictionary(person)
 let fieldsData = try parser.encodeFields(person)
 ```
 
+## Batch Operations
+
+Batch multiple document reads or writes into a single API call. Reduces network overhead and provides atomic commit semantics.
+
+### FirestoreDocument batch methods
+
+```swift
+let db = FirestoreDocument(config: config)
+
+// batchGet — fetch multiple documents in one request
+let results = try await db.batchGet(documents: ["users/user1", "users/user2"])
+for result in results {
+  switch result {
+  case .found(let doc):
+    print("Found: \(doc.name)")
+  case .missing(let path):
+    print("Missing: \(path)")
+  }
+}
+
+// With document mask (projection)
+let masked = try await db.batchGet(
+  documents: ["users/user1"],
+  mask: FirestoreDocumentMask(fieldPaths: ["name", "email"])
+)
+
+// commit — atomically apply writes
+let commitResponse = try await db.commit(writes: [
+  .create(myUser, at: "users/new"),
+  .update(myUser, at: "users/existing", updateMask: ["age"]),
+  .delete(at: "users/old"),
+])
+
+// batchWrite — apply writes (non-atomic, per-write status)
+let batchWriteResponse = try await db.batchWrite(writes: [
+  .delete(at: "users/stale"),
+])
+```
+
+### Typed batchGet
+
+Decode each found document into a `Document<T>` with the document name attached.
+
+```swift
+struct User: Decodable {
+  let name: String
+  let email: String
+}
+
+// Homogeneous — all documents are the same type
+let users: [Document<User>] = try await db.batchGet(
+  User.self,
+  documents: ["users/user1", "users/user2"]
+)
+
+// Missing documents are skipped; Document<T> wraps .data and .name
+for user in users {
+  print("\(user.name): \(user.data.name)")
+}
+
+// Heterogeneous — two different types in one request
+struct Post: Decodable {
+  let title: String
+}
+
+let (users, posts) = try await db.batchGet(
+  User.self, documentPaths: ["users/user1", "users/user2"],
+  Post.self, documentPaths: ["posts/post1"]
+)
+```
+
+### Static API
+
+Uses `FirestoreConfig.shared`:
+
+```swift
+FirestoreConfig.shared = config
+let results = try await FirestoreDocument.batchGet(documents: ["users/u1", "users/u2"])
+let response = try await FirestoreDocument.commit(writes: [.delete(at: "users/old")])
+```
+
+### FirestoreBatch builder
+
+Accumulates writes and applies them in one commit.
+
+```swift
+var batch = FirestoreBatch()
+try batch.create(newUser, at: "users/new")
+try batch.update(updatedUser, at: "users/existing", updateMask: ["email"])
+batch.delete(at: "users/stale")
+
+let response = try await batch.apply(to: db)
+// or:
+let response = try await batch.commit(using: db)
+```
+
+### FirestoreWrite
+
+Create write operations individually or via static constructors:
+
+```swift
+// Static constructors
+let create = try FirestoreWrite.create(myUser, at: "users/new")
+let update = try FirestoreWrite.update(myUser, at: "users/existing", updateMask: ["age"])
+let delete = FirestoreWrite.delete(at: "users/old")
+let updateWithExists = try FirestoreWrite.update(
+  myUser, at: "users/existing",
+  updateMask: ["name"],
+  exists: true   // precondition: document must exist
+)
+```
+
+### Deleting documents
+
+Firestore REST has no standalone delete endpoint — all deletes go through `commit` or `batchWrite`:
+
+```swift
+// Single delete via commit
+let response = try await db.commit(writes: [.delete(at: "users/old")])
+
+// Multiple deletes via batchWrite
+let response = try await db.batchWrite(writes: [
+  .delete(at: "users/stale1"),
+  .delete(at: "users/stale2"),
+])
+
+// Delete with precondition (only if document exists)
+let response = try await db.commit(writes: [
+  FirestoreWrite.delete(at: "users/old", exists: true),
+])
+```
+
 ## Examples
 
 ### Full CRUD with Firestore REST API
@@ -276,30 +409,26 @@ let config = FirestoreConfig(projectId: "my-project", accessToken: token)
 let db = FirestoreDocument(config: config)
 let parser = FirestoreDocumentParser()
 
-// CREATE
-var newUser = User(name: "Alice", email: "alice@example.com")
-let body = try parser.encode(newUser)
-var request = try config.makeRequest(path: "users")
-request.httpMethod = "POST"
-request.httpBody = body
-let (data, _) = try await URLSession.shared.data(for: request)
-newUser = try parser.decode(User.self, from: data)
+// CREATE (with commit)
+var batch = FirestoreBatch()
+let newUser = User(name: "Alice", email: "alice@example.com")
+try batch.create(newUser, at: "users/new")
+_ = try await batch.apply(to: db)
 
 // READ
 let user = try await db.decode(User.self, from: "users/abc123")
 
-// UPDATE
-user.email = "alice@newdomain.com"
-let updateBody = try parser.encodeFields(user)
-var updateReq = try config.makeRequest(path: "users/abc123")
-updateReq.httpMethod = "PATCH"
-updateReq.httpBody = updateBody
-_ = try await URLSession.shared.data(for: updateReq)
+// UPDATE (with commit)
+var updated = user
+updated.email = "alice@newdomain.com"
+var updateBatch = FirestoreBatch()
+try updateBatch.update(updated, at: "users/abc123", updateMask: ["email"])
+_ = try await updateBatch.apply(to: db)
 
-// DELETE
-var deleteReq = try config.makeRequest(path: "users/abc123")
-deleteReq.httpMethod = "DELETE"
-_ = try await URLSession.shared.data(for: deleteReq)
+// DELETE (with commit)
+var deleteBatch = FirestoreBatch()
+deleteBatch.delete(at: "users/abc123")
+_ = try await deleteBatch.apply(to: db)
 ```
 
 ### Swift Dependencies Integration
@@ -346,6 +475,22 @@ struct UsersService {
   func loadUsers() async throws -> [User] {
     try await client.decode([User].self, from: "users")
   }
+
+  func batchGetUsers(_ ids: [String]) async throws -> [FirestoreBatchGetResult] {
+    try await client.batchGet(documents: ids.map { "users/\($0)" })
+  }
+
+  func deleteUsers(_ ids: [String]) async throws -> FirestoreBatchWriteResponse {
+    try await client.batchWrite(writes: ids.map { .delete(at: "users/\($0)") })
+  }
+
+  func transferUser(from: String, to: String) async throws {
+    let results = try await client.batchGet(documents: [from])
+    guard case .found = results.first else { return }
+    _ = try await client.commit(writes: [
+      .delete(at: from),
+    ])
+  }
 }
 ```
 
@@ -369,6 +514,27 @@ let service = withDependencies {
 
 let users = try await service.loadUsers()
 XCTAssertEqual(users.count, 2)
+
+// Batch operations
+mock.batchGetHandler = { docs, mask in
+  docs.map { _ in
+    .found(FirestoreBatchFoundDocument(
+      name: "projects/p/d/doc/users/u1", fields: [:],
+      createTime: nil, updateTime: nil
+    ))
+  }
+}
+mock.commitHandler = { writes, txn in
+  FirestoreCommitResponse(writeResults: writes.map { _ in
+    FirestoreWriteResult(updateTime: "2024-01-01T00:00:00Z")
+  }, commitTime: "2024-01-01T00:00:00Z")
+}
+mock.batchWriteHandler = { writes, labels in
+  FirestoreBatchWriteResponse(
+    writeResults: writes.map { _ in FirestoreWriteResult(updateTime: nil) },
+    status: nil
+  )
+}
 ```
 
 #### `FirestoreClient` protocol
@@ -378,6 +544,9 @@ public protocol FirestoreClient: Sendable {
   func decode<T: Decodable>(_ type: T.Type, from path: String) async throws -> T
   func fetch(from path: String) async throws -> Data
   func encode<T: Encodable>(_ value: T, documentName: String?) throws -> Data
+  func batchGet(documents: [String], mask: FirestoreDocumentMask?) async throws -> [FirestoreBatchGetResult]
+  func commit(writes: [FirestoreWrite], transaction: String?) async throws -> FirestoreCommitResponse
+  func batchWrite(writes: [FirestoreWrite], labels: [String: String]?) async throws -> FirestoreBatchWriteResponse
 }
 ```
 
@@ -443,12 +612,14 @@ Once bootstrapped, logs from the package will appear at the following levels:
 | `error` | `FirestoreConfig` (missing projectId), `FirestoreDocumentParser` (decode/encode failures) |
 
 ## Architecture
-├── FirestoreDocument        # Unified async API (config + network + decode)
+├── FirestoreDocument        # Unified async API (config + network + decode + batch)
 ├── FirestoreConfig          # Project, database, auth configuration
 ├── FirestoreDocumentParser  # Local parsing/encoding (no networking)
 ├── FirestoreNormalizer      # Firestore JSON → flat JSON converter
 ├── PropertyWrappers         # @DocumentID, @ServerTimestamp, @ExplicitNull
 ├── FirestoreResponse        # REST API response Codable models
+├── FirestoreBatchOperation  # Batch request/response types (FirestoreWrite, FirestoreBatchGetResult, etc.)
+├── FirestoreBatch           # Write-accumulating builder with commit/apply
 └── Internal/
     ├── FirestoreValue       # Internal value representation
     ├── FirestoreDecoderImpl # Custom Swift Decoder implementation
@@ -475,7 +646,7 @@ The package has **four layers**:
 
 ## Limitations
 
-- The package does **not** include a full Firestore client (transactions, realtime listeners, or complex queries). It's designed for straightforward document reads, writes, and list operations via the REST API.
+- The package does **not** include a full Firestore client (realtime listeners or complex queries). It's designed for straightforward document reads, writes, batch operations, and list queries via the REST API.
 - Authentication requires obtaining a Firebase Auth ID token or OAuth2 access token separately.
 - The `@DocumentID` property wrapper populates from the document's `name` field (full path), not just the short document ID.
 

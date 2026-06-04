@@ -1,6 +1,6 @@
 import Foundation
 
-indirect enum FirestoreValue: Sendable {
+public indirect enum FirestoreValue: Sendable {
   case null
   case bool(Bool)
   case int(Int64)
@@ -16,7 +16,7 @@ indirect enum FirestoreValue: Sendable {
 }
 
 extension FirestoreValue: Equatable {
-  static func == (lhs: FirestoreValue, rhs: FirestoreValue) -> Bool {
+  public static func == (lhs: FirestoreValue, rhs: FirestoreValue) -> Bool {
     switch (lhs, rhs) {
     case (.null, .null): return true
     case let (.bool(a), .bool(b)): return a == b

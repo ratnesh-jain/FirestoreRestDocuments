@@ -19,6 +19,27 @@ public struct FirestoreDocument: Sendable {
     try await FirestoreDocument().decode(type, from: path)
   }
 
+  public static func batchGet(
+    documents: [String],
+    mask: FirestoreDocumentMask? = nil
+  ) async throws -> [FirestoreBatchGetResult] {
+    try await FirestoreDocument().batchGet(documents: documents, mask: mask)
+  }
+
+  public static func commit(
+    writes: [FirestoreWrite],
+    transaction: String? = nil
+  ) async throws -> FirestoreCommitResponse {
+    try await FirestoreDocument().commit(writes: writes, transaction: transaction)
+  }
+
+  public static func batchWrite(
+    writes: [FirestoreWrite],
+    labels: [String: String]? = nil
+  ) async throws -> FirestoreBatchWriteResponse {
+    try await FirestoreDocument().batchWrite(writes: writes, labels: labels)
+  }
+
   // MARK: - Instance API
 
   public func decode<T: Decodable>(_ type: T.Type, from path: String) async throws -> T {
@@ -110,5 +131,174 @@ public struct FirestoreDocument: Sendable {
       pageToken = page.nextPageToken
     } while pageToken != nil
     return allItems
+  }
+
+  // MARK: - Batch Operations
+
+  public func batchGet(
+    documents: [String],
+    mask: FirestoreDocumentMask? = nil
+  ) async throws -> [FirestoreBatchGetResult] {
+    Logger.firestoreRestDocuments.debug("BatchGet \(documents.count) document(s)")
+    let fullPaths = documents.map { config.fullDocumentPath(for: $0) }
+    var bodyDict: [String: Any] = ["documents": fullPaths]
+    if let mask {
+      bodyDict["mask"] = ["fieldPaths": mask.fieldPaths]
+    }
+    let body = try JSONSerialization.data(withJSONObject: bodyDict, options: [.sortedKeys])
+    var request = config.makeRequest(url: config.batchGetURL)
+    request.httpMethod = "POST"
+    request.httpBody = body
+
+    let (data, response) = try await URLSession.shared.data(for: request)
+    guard let httpResponse = response as? HTTPURLResponse else {
+      throw FirestoreParsingError.decodingFailed("Invalid response")
+    }
+    guard (200...299).contains(httpResponse.statusCode) else {
+      let body = String(data: data, encoding: .utf8) ?? "<empty>"
+      throw FirestoreParsingError.decodingFailed("HTTP \(httpResponse.statusCode): \(body)")
+    }
+
+    return try parser.decodeBatchGetResponse(from: data)
+  }
+
+  public func commit(
+    writes: [FirestoreWrite],
+    transaction: String? = nil
+  ) async throws -> FirestoreCommitResponse {
+    Logger.firestoreRestDocuments.debug("Commit \(writes.count) write(s)")
+    let body = try buildCommitBody(writes: writes, transaction: transaction)
+    var request = config.makeRequest(url: config.commitURL)
+    request.httpMethod = "POST"
+    request.httpBody = body
+
+    let (data, response) = try await URLSession.shared.data(for: request)
+    guard let httpResponse = response as? HTTPURLResponse else {
+      throw FirestoreParsingError.decodingFailed("Invalid response")
+    }
+    guard (200...299).contains(httpResponse.statusCode) else {
+      let body = String(data: data, encoding: .utf8) ?? "<empty>"
+      throw FirestoreParsingError.decodingFailed("HTTP \(httpResponse.statusCode): \(body)")
+    }
+
+    return try JSONDecoder().decode(FirestoreCommitResponse.self, from: data)
+  }
+
+  public func batchWrite(
+    writes: [FirestoreWrite],
+    labels: [String: String]? = nil
+  ) async throws -> FirestoreBatchWriteResponse {
+    Logger.firestoreRestDocuments.debug("BatchWrite \(writes.count) write(s)")
+    let body = try buildBatchWriteBody(writes: writes, labels: labels)
+    var request = config.makeRequest(url: config.batchWriteURL)
+    request.httpMethod = "POST"
+    request.httpBody = body
+
+    let (data, response) = try await URLSession.shared.data(for: request)
+    guard let httpResponse = response as? HTTPURLResponse else {
+      throw FirestoreParsingError.decodingFailed("Invalid response")
+    }
+    guard (200...299).contains(httpResponse.statusCode) else {
+      let body = String(data: data, encoding: .utf8) ?? "<empty>"
+      throw FirestoreParsingError.decodingFailed("HTTP \(httpResponse.statusCode): \(body)")
+    }
+
+    return try JSONDecoder().decode(FirestoreBatchWriteResponse.self, from: data)
+  }
+
+  // MARK: - Variadic-generic batchGet
+
+  public func batchGet<T: Decodable & Sendable>(
+    _ type: T.Type,
+    documents: [String],
+    mask: FirestoreDocumentMask? = nil
+  ) async throws -> [Document<T>] {
+    let results = try await batchGet(documents: documents, mask: mask)
+    return decodeBatchGetSegment(T.self, from: results)
+  }
+
+  public func batchGet<T1: Decodable & Sendable, T2: Decodable & Sendable>(
+    _ type1: T1.Type, documentPaths: [String],
+    _ type2: T2.Type, documentPaths paths2: [String],
+    mask: FirestoreDocumentMask? = nil
+  ) async throws -> ([Document<T1>], [Document<T2>]) {
+    let allPaths = documentPaths + paths2
+    let results = try await batchGet(documents: allPaths, mask: mask)
+    let mid = documentPaths.count
+    let seg1 = Array(results[0..<mid])
+    let seg2 = Array(results[mid...])
+    return (
+      decodeBatchGetSegment(T1.self, from: seg1),
+      decodeBatchGetSegment(T2.self, from: seg2)
+    )
+  }
+
+  private func decodeBatchGetSegment<T: Decodable & Sendable>(
+    _ type: T.Type,
+    from results: [FirestoreBatchGetResult]
+  ) -> [Document<T>] {
+    var items: [Document<T>] = []
+    for result in results {
+      guard case .found(let doc) = result else { continue }
+      let value = FirestoreValue.document(name: doc.name, fields: doc.fields)
+      var userInfo: [CodingUserInfoKey: Any] = [:]
+      userInfo[.documentNameUserInfoKey] = doc.name
+      let decoder = _FirestoreDecoder(value: value, userInfo: userInfo)
+      do {
+        items.append(try Document<T>(from: decoder))
+      } catch {
+        Logger.firestoreRestDocuments.warning("Failed to decode batchGet result for \(doc.name): \(error)")
+      }
+    }
+    return items
+  }
+
+  // MARK: - Private Helpers
+
+  private func buildCommitBody(writes: [FirestoreWrite], transaction: String?) throws -> Data {
+    var writesJSON: [[String: Any]] = []
+    for write in writes {
+      writesJSON.append(try serializeWrite(write))
+    }
+    var body: [String: Any] = ["writes": writesJSON]
+    if let transaction {
+      body["transaction"] = transaction
+    }
+    return try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
+  }
+
+  private func buildBatchWriteBody(writes: [FirestoreWrite], labels: [String: String]?) throws -> Data {
+    var writesJSON: [[String: Any]] = []
+    for write in writes {
+      writesJSON.append(try serializeWrite(write))
+    }
+    var body: [String: Any] = ["writes": writesJSON]
+    if let labels {
+      body["labels"] = labels
+    }
+    return try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
+  }
+
+  private func serializeWrite(_ write: FirestoreWrite) throws -> [String: Any] {
+    let fullPath = config.fullDocumentPath(for: write.documentPath)
+    switch write.storage {
+    case .delete:
+      return ["delete": fullPath]
+
+    case .create(let fieldsData):
+      let fields = try JSONSerialization.jsonObject(with: fieldsData) as! [String: Any]
+      return ["update": ["name": fullPath, "fields": fields]]
+
+    case .update(let fieldsData, let updateMask, let exists):
+      let fields = try JSONSerialization.jsonObject(with: fieldsData) as! [String: Any]
+      var document: [String: Any] = ["name": fullPath, "fields": fields]
+      if let updateMask {
+        document["updateMask"] = ["fieldPaths": updateMask]
+      }
+      if let exists {
+        document["currentDocument"] = ["exists": exists]
+      }
+      return ["update": document]
+    }
   }
 }

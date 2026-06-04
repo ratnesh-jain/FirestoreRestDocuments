@@ -9,6 +9,21 @@ public protocol FirestoreClient: Sendable {
     _ type: T.Type, from path: String,
     pageSize: Int?, pageToken: String?
   ) async throws -> FirestorePage<T>
+
+  func batchGet(
+    documents: [String],
+    mask: FirestoreDocumentMask?
+  ) async throws -> [FirestoreBatchGetResult]
+
+  func commit(
+    writes: [FirestoreWrite],
+    transaction: String?
+  ) async throws -> FirestoreCommitResponse
+
+  func batchWrite(
+    writes: [FirestoreWrite],
+    labels: [String: String]?
+  ) async throws -> FirestoreBatchWriteResponse
 }
 
 extension FirestoreClient {

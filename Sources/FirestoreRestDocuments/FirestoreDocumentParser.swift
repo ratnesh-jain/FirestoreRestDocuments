@@ -252,6 +252,37 @@ public struct FirestoreDocumentParser: Sendable {
     return result
   }
 
+  // MARK: - Batch Operations
+
+  public func decodeBatchGetResponse(from data: Data) throws -> [FirestoreBatchGetResult] {
+    let json = try JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed])
+    if let array = json as? [[String: Any]] {
+      return try array.map { try decodeSingleBatchGetResult($0) }
+    }
+    if let dict = json as? [String: Any] {
+      return [try decodeSingleBatchGetResult(dict)]
+    }
+    throw FirestoreParsingError.decodingFailed("Invalid batchGet response format")
+  }
+
+  private func decodeSingleBatchGetResult(_ dict: [String: Any]) throws -> FirestoreBatchGetResult {
+    if let found = dict["found"] as? [String: Any],
+       let name = found["name"] as? String,
+       let fields = found["fields"] as? [String: Any] {
+      let parsedFields = try fields.mapValues { try parseFirestoreValue(from: $0) }
+      return .found(FirestoreBatchFoundDocument(
+        name: name,
+        fields: parsedFields,
+        createTime: found["createTime"] as? String,
+        updateTime: found["updateTime"] as? String
+      ))
+    }
+    if let missing = dict["missing"] as? String {
+      return .missing(missing)
+    }
+    throw FirestoreParsingError.decodingFailed("Invalid batchGet result entry: \(dict)")
+  }
+
   private func extractDocumentName(from json: Any) -> String? {
     (json as? [String: Any])?["name"] as? String
   }

@@ -75,6 +75,23 @@ public struct FirestoreConfig: Sendable {
     if let token = accessToken {
       req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     }
+    req.setValue("application/json", forHTTPHeaderField: "Content-Type")
     return req
+  }
+
+  var batchGetURL: URL {
+    URL(string: "\(Self.defaultBaseURL)/projects/\(projectId)/databases/\(databaseId)/documents:batchGet")!
+  }
+
+  var commitURL: URL {
+    URL(string: "\(Self.defaultBaseURL)/projects/\(projectId)/databases/\(databaseId)/documents:commit")!
+  }
+
+  var batchWriteURL: URL {
+    URL(string: "\(Self.defaultBaseURL)/projects/\(projectId)/databases/\(databaseId)/documents:batchWrite")!
+  }
+
+  func fullDocumentPath(for relativePath: String) -> String {
+    "\(documentsBaseURL)/\(relativePath)"
   }
 }
