@@ -119,6 +119,10 @@ public struct FirestoreDocumentParser: Sendable {
     }
 
     if let dict = json as? [String: Any] {
+      if dict.isEmpty {
+        return .array([])
+      }
+
       if let fields = dict["fields"] as? [String: Any] {
         let parsed = try fields.mapValues { try parseFirestoreValue(from: $0) }
         if let name = dict["name"] as? String {
