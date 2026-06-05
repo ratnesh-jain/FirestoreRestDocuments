@@ -32,7 +32,8 @@ public struct FirestoreDocument: Sendable {
       Logger.firestoreRestDocuments.debug("Successfully decoded \(T.self) from path: \(path)")
       return result
     } catch {
-      Logger.firestoreRestDocuments.error("Failed to decode \(T.self) from path: \(path): \(error)")
+      let bodyStr = String(data: data, encoding: .utf8) ?? "<non-utf8>"
+      Logger.firestoreRestDocuments.error("Failed to decode \(T.self) from path: \(path): \(error). Response body:\n\(bodyStr)")
       throw error
     }
   }
@@ -52,7 +53,8 @@ public struct FirestoreDocument: Sendable {
       Logger.firestoreRestDocuments.debug("Successfully decoded \(T.self) from path: \(path) using JSONDecoder")
       return result
     } catch {
-      Logger.firestoreRestDocuments.error("Failed to decode \(T.self) from path: \(path) using JSONDecoder: \(error)")
+      let bodyStr = String(data: data, encoding: .utf8) ?? "<non-utf8>"
+      Logger.firestoreRestDocuments.error("Failed to decode \(T.self) from path: \(path) using JSONDecoder: \(error). Response body:\n\(bodyStr)")
       throw error
     }
   }
