@@ -1,5 +1,6 @@
 import Dependencies
 import FirestoreRestDocuments
+import Logging
 
 // MARK: - Config dependency
 
@@ -19,6 +20,24 @@ extension DefaultFirestoreConfigKey: DependencyKey {
   static let liveValue = FirestoreConfig(projectId: "")
 }
 
+// MARK: - Log level dependency
+
+extension DependencyValues {
+  public var defaultFirestoreLogLevel: Logger.Level {
+    get { self[DefaultFirestoreLogLevelKey.self] }
+    set { self[DefaultFirestoreLogLevelKey.self] = newValue }
+  }
+}
+
+private enum DefaultFirestoreLogLevelKey: TestDependencyKey {
+  static let testValue = Logger.Level.debug
+  static let previewValue = Logger.Level.debug
+}
+
+extension DefaultFirestoreLogLevelKey: DependencyKey {
+  static let liveValue = Logger.Level.debug
+}
+
 // MARK: - FirestoreClient dependency
 
 extension DependencyValues {
@@ -36,6 +55,7 @@ private enum FirestoreClientKey: TestDependencyKey {
 extension FirestoreClientKey: DependencyKey {
   static var liveValue: any FirestoreClient {
     @Dependency(\.defaultFirestoreConfig) var config
-    return LiveFirestoreClient(config: config)
+    @Dependency(\.defaultFirestoreLogLevel) var logLevel
+    return LiveFirestoreClient(config: config, logLevel: logLevel)
   }
 }

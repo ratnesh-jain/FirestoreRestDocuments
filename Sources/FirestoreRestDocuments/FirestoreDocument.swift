@@ -7,10 +7,22 @@ import Logging
 public struct FirestoreDocument: Sendable {
   public let config: FirestoreConfig
   public let parser: FirestoreDocumentParser
+  public let logLevel: Logger.Level
 
-  public init(config: FirestoreConfig? = nil, parser: FirestoreDocumentParser = .init()) {
+  public init(
+    config: FirestoreConfig? = nil,
+    parser: FirestoreDocumentParser = .init(),
+    logLevel: Logger.Level? = nil
+  ) {
     self.config = config ?? FirestoreConfig.shared
     self.parser = parser
+    self.logLevel = logLevel ?? Logger.defaultFirestoreLogLevel
+  }
+
+  private var logger: Logger {
+    var logger = Logger(label: "com.firestorerestdocuments")
+    logger.logLevel = logLevel
+    return logger
   }
 
   // MARK: - Static API (uses FirestoreConfig.shared)
@@ -22,18 +34,18 @@ public struct FirestoreDocument: Sendable {
   // MARK: - Instance API
 
   public func decode<T: Decodable>(_ type: T.Type, from path: String) async throws -> T {
-    Logger.firestoreRestDocuments.debug("Decoding \(T.self) from path: \(path)")
+    logger.debug("Decoding \(T.self) from path: \(path)")
     let data = try await fetch(from: path)
-    Logger.firestoreRestDocuments.debug("Fetched \(data.count) bytes for path: \(path)")
+    logger.debug("Fetched \(data.count) bytes for path: \(path)")
     let bodyPreview = String(data: data.prefix(4096), encoding: .utf8) ?? "<non-utf8>"
-    Logger.firestoreRestDocuments.debug("Response body preview: \(bodyPreview)")
+    logger.debug("Response body preview: \(bodyPreview)")
     do {
       let result = try parser.decode(T.self, from: data)
-      Logger.firestoreRestDocuments.debug("Successfully decoded \(T.self) from path: \(path)")
+      logger.debug("Successfully decoded \(T.self) from path: \(path)")
       return result
     } catch {
       let bodyStr = String(data: data, encoding: .utf8) ?? "<non-utf8>"
-      Logger.firestoreRestDocuments.error("Failed to decode \(T.self) from path: \(path): \(error). Response body:\n\(bodyStr)")
+      logger.error("Failed to decode \(T.self) from path: \(path): \(error). Response body:\n\(bodyStr)")
       throw error
     }
   }
@@ -43,41 +55,41 @@ public struct FirestoreDocument: Sendable {
     from path: String,
     using jsonDecoder: JSONDecoder
   ) async throws -> T {
-    Logger.firestoreRestDocuments.debug("Decoding \(T.self) from path: \(path) using JSONDecoder")
+    logger.debug("Decoding \(T.self) from path: \(path) using JSONDecoder")
     let data = try await fetch(from: path)
-    Logger.firestoreRestDocuments.debug("Fetched \(data.count) bytes for path: \(path)")
+    logger.debug("Fetched \(data.count) bytes for path: \(path)")
     let bodyPreview = String(data: data.prefix(4096), encoding: .utf8) ?? "<non-utf8>"
-    Logger.firestoreRestDocuments.debug("Response body preview: \(bodyPreview)")
+    logger.debug("Response body preview: \(bodyPreview)")
     do {
       let result = try jsonDecoder.firestoreDecode(T.self, from: data)
-      Logger.firestoreRestDocuments.debug("Successfully decoded \(T.self) from path: \(path) using JSONDecoder")
+      logger.debug("Successfully decoded \(T.self) from path: \(path) using JSONDecoder")
       return result
     } catch {
       let bodyStr = String(data: data, encoding: .utf8) ?? "<non-utf8>"
-      Logger.firestoreRestDocuments.error("Failed to decode \(T.self) from path: \(path) using JSONDecoder: \(error). Response body:\n\(bodyStr)")
+      logger.error("Failed to decode \(T.self) from path: \(path) using JSONDecoder: \(error). Response body:\n\(bodyStr)")
       throw error
     }
   }
 
   public func fetch(from path: String) async throws -> Data {
-    Logger.firestoreRestDocuments.debug("Fetching from path: \(path)")
+    logger.debug("Fetching from path: \(path)")
     let request = try config.makeRequest(path: path)
-    Logger.firestoreRestDocuments.debug("Request URL: \(request.url?.absoluteString ?? "nil")")
+    logger.debug("Request URL: \(request.url?.absoluteString ?? "nil")")
     let (data, response) = try await URLSession.shared.data(for: request)
 
     guard let httpResponse = response as? HTTPURLResponse else {
-      Logger.firestoreRestDocuments.error("Invalid response (not HTTP)")
+      logger.error("Invalid response (not HTTP)")
       throw FirestoreParsingError.decodingFailed("Invalid response")
     }
     guard (200...299).contains(httpResponse.statusCode) else {
       let body = String(data: data, encoding: .utf8) ?? "<empty>"
-      Logger.firestoreRestDocuments.warning("HTTP \(httpResponse.statusCode): \(body)")
+      logger.warning("HTTP \(httpResponse.statusCode): \(body)")
       throw FirestoreParsingError.decodingFailed(
         "HTTP \(httpResponse.statusCode): \(body)"
       )
     }
-    Logger.firestoreRestDocuments.debug("Response \(httpResponse.statusCode) (\(data.count) bytes)")
-    Logger.firestoreRestDocuments.debug("Response headers: \(httpResponse.allHeaderFields)")
+    logger.debug("Response \(httpResponse.statusCode) (\(data.count) bytes)")
+    logger.debug("Response headers: \(httpResponse.allHeaderFields)")
     return data
   }
 
@@ -94,7 +106,7 @@ public struct FirestoreDocument: Sendable {
     _ type: T.Type, from path: String,
     pageSize: Int? = nil, pageToken: String? = nil
   ) async throws -> FirestorePage<T> {
-    Logger.firestoreRestDocuments.debug("Fetching page of \(T.self) from path: \(path)")
+    logger.debug("Fetching page of \(T.self) from path: \(path)")
     var items = [URLQueryItem]()
     if let pageSize {
       items.append(URLQueryItem(name: "pageSize", value: String(pageSize)))
@@ -112,7 +124,7 @@ public struct FirestoreDocument: Sendable {
       let body = String(data: data, encoding: .utf8) ?? "<empty>"
       throw FirestoreParsingError.decodingFailed("HTTP \(httpResponse.statusCode): \(body)")
     }
-    Logger.firestoreRestDocuments.debug("Response \(httpResponse.statusCode) (\(data.count) bytes)")
+    logger.debug("Response \(httpResponse.statusCode) (\(data.count) bytes)")
     return try parser.decodePage(type, from: data)
   }
 
@@ -127,7 +139,7 @@ public struct FirestoreDocument: Sendable {
     _ type: T.Type, from path: String,
     pageSize: Int? = nil
   ) async throws -> [T] {
-    Logger.firestoreRestDocuments.debug("Fetching all \(T.self) from path: \(path)")
+    logger.debug("Fetching all \(T.self) from path: \(path)")
     var allItems = [T]()
     var pageToken: String? = nil
     repeat {
