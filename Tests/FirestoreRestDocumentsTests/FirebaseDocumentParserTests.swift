@@ -437,6 +437,24 @@ struct FirebaseDocumentParserTests {
     // Should succeed with empty fields
   }
 
+  @Test func testParseEmptyObjectField() throws {
+    let json = """
+    {
+      "fields": {
+        "metadata": {}
+      }
+    }
+    """.data(using: .utf8)!
+
+    struct Doc: Decodable {
+      let metadata: [String: String]?
+    }
+
+    let parser = FirestoreDocumentParser()
+    let doc = try parser.decode(Doc.self, from: json)
+    #expect(doc.metadata == [:])
+  }
+
   @Test func testEncodeWithServerTimestamp() throws {
     struct Item: Encodable {
       let name: String

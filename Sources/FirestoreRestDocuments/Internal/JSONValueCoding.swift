@@ -114,6 +114,10 @@ func parseFirestoreValue(from json: Any) throws -> FirestoreValue {
     return .map(result)
   }
 
+  if dict.isEmpty {
+    return .map([:])
+  }
+
   throw FirestoreParsingError.unknownValueType("Unknown Firestore value type in: \(dict)")
 }
 
