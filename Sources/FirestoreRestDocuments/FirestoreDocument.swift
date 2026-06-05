@@ -22,8 +22,19 @@ public struct FirestoreDocument: Sendable {
   // MARK: - Instance API
 
   public func decode<T: Decodable>(_ type: T.Type, from path: String) async throws -> T {
+    Logger.firestoreRestDocuments.trace("Decoding \(T.self) from path: \(path)")
     let data = try await fetch(from: path)
-    return try parser.decode(T.self, from: data)
+    Logger.firestoreRestDocuments.trace("Fetched \(data.count) bytes for path: \(path)")
+    let bodyPreview = String(data: data.prefix(4096), encoding: .utf8) ?? "<non-utf8>"
+    Logger.firestoreRestDocuments.trace("Response body preview: \(bodyPreview)")
+    do {
+      let result = try parser.decode(T.self, from: data)
+      Logger.firestoreRestDocuments.trace("Successfully decoded \(T.self) from path: \(path)")
+      return result
+    } catch {
+      Logger.firestoreRestDocuments.error("Failed to decode \(T.self) from path: \(path): \(error)")
+      throw error
+    }
   }
 
   public func decode<T: Decodable>(
@@ -31,13 +42,25 @@ public struct FirestoreDocument: Sendable {
     from path: String,
     using jsonDecoder: JSONDecoder
   ) async throws -> T {
+    Logger.firestoreRestDocuments.trace("Decoding \(T.self) from path: \(path) using JSONDecoder")
     let data = try await fetch(from: path)
-    return try jsonDecoder.firestoreDecode(T.self, from: data)
+    Logger.firestoreRestDocuments.trace("Fetched \(data.count) bytes for path: \(path)")
+    let bodyPreview = String(data: data.prefix(4096), encoding: .utf8) ?? "<non-utf8>"
+    Logger.firestoreRestDocuments.trace("Response body preview: \(bodyPreview)")
+    do {
+      let result = try jsonDecoder.firestoreDecode(T.self, from: data)
+      Logger.firestoreRestDocuments.trace("Successfully decoded \(T.self) from path: \(path) using JSONDecoder")
+      return result
+    } catch {
+      Logger.firestoreRestDocuments.error("Failed to decode \(T.self) from path: \(path) using JSONDecoder: \(error)")
+      throw error
+    }
   }
 
   public func fetch(from path: String) async throws -> Data {
     Logger.firestoreRestDocuments.debug("Fetching from path: \(path)")
     let request = try config.makeRequest(path: path)
+    Logger.firestoreRestDocuments.trace("Request URL: \(request.url?.absoluteString ?? "nil")")
     let (data, response) = try await URLSession.shared.data(for: request)
 
     guard let httpResponse = response as? HTTPURLResponse else {
@@ -52,6 +75,7 @@ public struct FirestoreDocument: Sendable {
       )
     }
     Logger.firestoreRestDocuments.debug("Response \(httpResponse.statusCode) (\(data.count) bytes)")
+    Logger.firestoreRestDocuments.trace("Response headers: \(httpResponse.allHeaderFields)")
     return data
   }
 
