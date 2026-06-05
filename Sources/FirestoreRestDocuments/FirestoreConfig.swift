@@ -50,9 +50,7 @@ public struct FirestoreConfig: Sendable {
         """
       )
     }
-    let url = URL(string: "\(documentsBaseURL)/\(path)")!
-    Logger.firestoreRestDocuments.debug("Request URL: \(url.absoluteString)")
-    var req = URLRequest(url: url)
+    var url = URL(string: "\(documentsBaseURL)/\(path)")!
     var items = queryItems
     if let key = apiKey, accessToken == nil {
       items.append(URLQueryItem(name: "key", value: key))
@@ -62,8 +60,10 @@ public struct FirestoreConfig: Sendable {
         throw FirestoreParsingError.invalidDocumentData("Invalid URL")
       }
       components.queryItems = items
-      req.url = components.url
+      url = components.url!
     }
+    var req = URLRequest(url: url)
+    Logger.firestoreRestDocuments.debug("Request URL: \(url.absoluteString)")
     if let token = accessToken {
       req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     }
