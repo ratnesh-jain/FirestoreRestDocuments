@@ -12,7 +12,9 @@ Parse Firestore documents directly from the [Firestore REST API](https://firebas
 - **All Firestore value types** — string, integer, double, boolean, map, array, timestamp, geo point, reference, bytes, null
 - **Property wrappers** — `@DocumentID`, `@ServerTimestamp`, `@ExplicitNull` (same API as the Firebase iOS SDK)
 - **Encoding** — encode Swift models back to Firestore REST wire format
-- **Zero dependencies** for the base library; optional `swift-dependencies` integration via separate product
+- **Write operations** — `commit`, `batchWrite`, `batchGet`, and a `FirestoreBatch` builder for create/update/delete via the REST API
+- **Dependencies** — `swift-log` and `swift-crypto` for the base library; optional `swift-dependencies` integration via separate product
+- **Service account auth** — mint and auto-refresh OAuth2 tokens from a service account JSON key
 
 ## Installation
 
@@ -134,6 +136,53 @@ let user = try await db.decode(User.self, from: "users/user1", using: decoder)
 | `"users/user1"` | `GetDocument` | `T.self` |
 | `"users/user1/orders"` | `ListDocuments` (subcollection) | `[T].self` |
 
+### Write operations
+
+Create, update, and delete documents through the REST API using `commit` or `batchWrite`:
+
+```swift
+let db = FirestoreDocument(config: config)
+
+// Create
+let write = try FirestoreWrite.create(newUser, at: "users/new-user")
+let response = try await db.commit(writes: [write])
+
+// Update (with field mask)
+let update = try FirestoreWrite.update(user, at: "users/abc123", updateMask: ["email"])
+_ = try await db.commit(writes: [update])
+
+// Delete
+_ = try await db.commit(writes: [.delete(at: "users/abc123")])
+
+// Batch multiple writes atomically
+var batch = FirestoreBatch()
+try batch.create(newUser, at: "users/new")
+try batch.update(user, at: "users/existing", updateMask: ["email"])
+batch.delete(at: "users/old")
+let result = try await batch.commit(using: db)
+```
+
+`batchWrite` is the non-transactional variant (per-write status reporting):
+
+```swift
+let response = try await db.batchWrite(writes: writes, labels: ["env": "prod"])
+```
+
+### Batch get
+
+Fetch multiple documents in one request:
+
+```swift
+let results = try await db.batchGet(documents: ["users/u1", "users/u2"])
+for result in results {
+  if case .found(let doc) = result {
+    print(doc.name, doc.fields)
+  }
+}
+
+// Typed convenience
+let users = try await db.batchGet(User.self, documents: ["users/u1", "users/u2"])
+```
 ### FirestoreConfig
 
 ```swift
@@ -148,6 +197,33 @@ let config = FirestoreConfig(
 - `accessToken` — sent as `Authorization: Bearer <token>`. Use a Firebase Auth ID token or Google OAuth2 token.
 - `apiKey` — appended as `?key=<apiKey>` query parameter. Simpler but less secure.
 - `accessToken` takes priority when both are set.
+
+### Service account authentication (automatic token refresh)
+
+For long-running servers, you can hand the library a service account JSON key and let it mint and refresh OAuth2 tokens automatically:
+
+```swift
+// From a decoded service account
+let account = try JSONDecoder().decode(
+  FirestoreServiceAccount.self,
+  from: Data(contentsOf: URL(fileURLWithPath: "serviceAccount.json"))
+)
+let config = FirestoreConfig(
+  projectId: "my-project",
+  serviceAccount: account
+)
+
+// Or directly from a file path
+let config = try FirestoreConfig(
+  projectId: "my-project",
+  serviceAccountKeyFileAtPath: "serviceAccount.json"
+)
+
+let db = FirestoreDocument(config: config)
+// Tokens are minted on first request and refreshed ~60s before expiry.
+```
+
+You can also implement `FirestoreAccessTokenProvider` for custom credential sources (gcloud, ADC, Vault, etc.).
 
 ### FirestoreDocumentParser (local parsing)
 
@@ -378,6 +454,9 @@ public protocol FirestoreClient: Sendable {
   func decode<T: Decodable>(_ type: T.Type, from path: String) async throws -> T
   func fetch(from path: String) async throws -> Data
   func encode<T: Encodable>(_ value: T, documentName: String?) throws -> Data
+  func batchGet(documents: [String], mask: FirestoreDocumentMask?) async throws -> [FirestoreBatchGetResult]
+  func commit(writes: [FirestoreWrite], transaction: String?) async throws -> FirestoreCommitResponse
+  func batchWrite(writes: [FirestoreWrite], labels: [String: String]?) async throws -> FirestoreBatchWriteResponse
 }
 ```
 
@@ -449,6 +528,8 @@ Once bootstrapped, logs from the package will appear at the following levels:
 ├── FirestoreNormalizer      # Firestore JSON → flat JSON converter
 ├── PropertyWrappers         # @DocumentID, @ServerTimestamp, @ExplicitNull
 ├── FirestoreResponse        # REST API response Codable models
+├── FirestoreBatch           # FirestoreBatch builder for writes
+├── FirestoreBatchOperation # FirestoreWrite, masks, and batch responses
 └── Internal/
     ├── FirestoreValue       # Internal value representation
     ├── FirestoreDecoderImpl # Custom Swift Decoder implementation

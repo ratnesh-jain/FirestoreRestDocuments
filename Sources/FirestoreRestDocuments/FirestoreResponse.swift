@@ -1,13 +1,13 @@
 import Foundation
 
-public struct FirestoreDocumentResponse: Codable {
+public struct FirestoreDocumentResponse: Codable, Sendable {
   public let name: String?
   public let fields: [String: FirestoreFieldValue]?
   public let createTime: String?
   public let updateTime: String?
 }
 
-public struct FirestoreFieldValue: Codable {
+public struct FirestoreFieldValue: Codable, Sendable {
   public var nullValue: String?
   public var booleanValue: String?
   public var integerValue: String?
@@ -37,7 +37,7 @@ public struct FirestoreFieldValue: Codable {
   }
 }
 
-public struct GeoPointValue: Codable {
+public struct GeoPointValue: Codable, Sendable {
   public let latitude: Double
   public let longitude: Double
 
@@ -47,7 +47,7 @@ public struct GeoPointValue: Codable {
   }
 }
 
-public struct FirestoreArrayValue: Codable {
+public struct FirestoreArrayValue: Codable, Sendable {
   public let values: [FirestoreFieldValue]?
 
   public init(values: [FirestoreFieldValue]?) {
@@ -55,7 +55,7 @@ public struct FirestoreArrayValue: Codable {
   }
 }
 
-public struct FirestoreMapValue: Codable {
+public struct FirestoreMapValue: Codable, Sendable {
   public let fields: [String: FirestoreFieldValue]?
 
   public init(fields: [String: FirestoreFieldValue]?) {
@@ -63,29 +63,29 @@ public struct FirestoreMapValue: Codable {
   }
 }
 
-public struct FirestoreReadResult: Codable {
+public struct FirestoreReadResult: Codable, Sendable {
   public let document: FirestoreDocumentResponse?
   public let readTime: String?
 }
 
-public struct FirestoreListResult: Codable {
+public struct FirestoreListResult: Codable, Sendable {
   public let documents: [FirestoreDocumentResponse]?
   public let nextPageToken: String?
 }
 
-public struct FirestoreRunQueryResult: Codable {
+public struct FirestoreRunQueryResult: Codable, Sendable {
   public let document: FirestoreDocumentResponse?
   public let readTime: String?
   public let skippedResults: Int?
 }
 
-public struct FirestoreWriteResult: Codable {
+public struct FirestoreWriteResult: Codable, Sendable {
   public let document: FirestoreDocumentResponse?
   public let writeResults: [FirestoreWriteResultEntry]?
   public let commitTime: String?
 }
 
-public struct FirestoreWriteResultEntry: Codable {
+public struct FirestoreWriteResultEntry: Codable, Sendable {
   public let updateTime: String?
   public let transformResults: [FirestoreFieldValue]?
 }

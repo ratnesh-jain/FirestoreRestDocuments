@@ -9,6 +9,7 @@ public struct FirestoreConfig: Sendable {
   public var databaseId: String
   public var accessToken: String?
   public var apiKey: String?
+  public var accessTokenProvider: (any FirestoreAccessTokenProvider)?
 
   private static let defaultBaseURL = "https://firestore.googleapis.com/v1"
 
@@ -18,19 +19,73 @@ public struct FirestoreConfig: Sendable {
     projectId: String,
     databaseId: String = "(default)",
     accessToken: String? = nil,
-    apiKey: String? = nil
+    apiKey: String? = nil,
+    accessTokenProvider: (any FirestoreAccessTokenProvider)? = nil
   ) {
     self.projectId = projectId
     self.databaseId = databaseId
     self.accessToken = accessToken
     self.apiKey = apiKey
+    self.accessTokenProvider = accessTokenProvider ?? (accessToken.map { StaticAccessTokenProvider(token: $0) })
+  }
+
+  public func resolveAccessToken() async throws -> String? {
+    if let provider = accessTokenProvider {
+      return try await provider.accessToken()
+    }
+    return accessToken
+  }
+
+  // MARK: - Service account convenience
+
+  public init(
+    projectId: String,
+    databaseId: String = "(default)",
+    serviceAccount: FirestoreServiceAccount,
+    apiKey: String? = nil,
+    scopes: [String] = ["https://www.googleapis.com/auth/datastore"]
+  ) {
+    let provider = ServiceAccountTokenProvider(serviceAccount: serviceAccount, scopes: scopes)
+    self.init(projectId: projectId, databaseId: databaseId, apiKey: apiKey, accessTokenProvider: provider)
+  }
+
+  public init(
+    projectId: String,
+    databaseId: String = "(default)",
+    serviceAccountKeyData: Data,
+    apiKey: String? = nil,
+    scopes: [String] = ["https://www.googleapis.com/auth/datastore"]
+  ) throws {
+    let provider = try ServiceAccountTokenProvider(keyData: serviceAccountKeyData, scopes: scopes)
+    self.init(projectId: projectId, databaseId: databaseId, apiKey: apiKey, accessTokenProvider: provider)
+  }
+
+  public init(
+    projectId: String,
+    databaseId: String = "(default)",
+    serviceAccountKeyFileAtPath path: String,
+    apiKey: String? = nil,
+    scopes: [String] = ["https://www.googleapis.com/auth/datastore"]
+  ) throws {
+    let provider = try ServiceAccountTokenProvider(keyFileAtPath: path, scopes: scopes)
+    self.init(projectId: projectId, databaseId: databaseId, apiKey: apiKey, accessTokenProvider: provider)
+  }
+
+  public init(
+    projectId: String,
+    databaseId: String = "(default)",
+    serviceAccountKeyPath path: String,
+    apiKey: String? = nil,
+    scopes: [String] = ["https://www.googleapis.com/auth/datastore"]
+  ) throws {
+    try self.init(projectId: projectId, databaseId: databaseId, serviceAccountKeyFileAtPath: path, apiKey: apiKey, scopes: scopes)
   }
 
   var documentsBaseURL: String {
     "\(Self.defaultBaseURL)/projects/\(projectId)/databases/\(databaseId)/documents"
   }
 
-  func makeRequest(path: String, queryItems: [URLQueryItem] = []) throws -> URLRequest {
+  func makeRequest(path: String, queryItems: [URLQueryItem] = [], accessToken: String? = nil) throws -> URLRequest {
     guard !projectId.trimmingCharacters(in: .whitespaces).isEmpty else {
       Logger.firestoreRestDocuments.error("projectId is empty or missing")
       throw FirestoreParsingError.invalidDocumentData(
@@ -51,8 +106,9 @@ public struct FirestoreConfig: Sendable {
       )
     }
     var url = URL(string: "\(documentsBaseURL)/\(path)")!
+    let resolvedAccessToken = accessToken ?? self.accessToken
     var items = queryItems
-    if let key = apiKey, accessToken == nil {
+    if let key = apiKey, resolvedAccessToken == nil {
       items.append(URLQueryItem(name: "key", value: key))
     }
     if !items.isEmpty {
@@ -64,17 +120,35 @@ public struct FirestoreConfig: Sendable {
     }
     var req = URLRequest(url: url)
     Logger.firestoreRestDocuments.debug("Request URL: \(url.absoluteString)")
-    if let token = accessToken {
+    if let token = resolvedAccessToken {
       req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     }
     return req
   }
 
-  func makeRequest(url: URL) -> URLRequest {
+  func makeRequest(url: URL, accessToken: String? = nil) -> URLRequest {
+    let resolvedAccessToken = accessToken ?? self.accessToken
     var req = URLRequest(url: url)
-    if let token = accessToken {
+    if let token = resolvedAccessToken {
       req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     }
+    req.setValue("application/json", forHTTPHeaderField: "Content-Type")
     return req
+  }
+
+  var batchGetURL: URL {
+    URL(string: "\(Self.defaultBaseURL)/projects/\(projectId)/databases/\(databaseId)/documents:batchGet")!
+  }
+
+  var commitURL: URL {
+    URL(string: "\(Self.defaultBaseURL)/projects/\(projectId)/databases/\(databaseId)/documents:commit")!
+  }
+
+  var batchWriteURL: URL {
+    URL(string: "\(Self.defaultBaseURL)/projects/\(projectId)/databases/\(databaseId)/documents:batchWrite")!
+  }
+
+  func fullDocumentPath(for relativePath: String) -> String {
+    "projects/\(projectId)/databases/\(databaseId)/documents/\(relativePath)"
   }
 }
