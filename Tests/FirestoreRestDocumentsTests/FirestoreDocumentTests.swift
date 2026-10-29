@@ -63,6 +63,54 @@ struct URLConstructionTests {
     let req = try config.makeRequest(path: "users/user123/orders")
     #expect(req.url!.absoluteString == "https://firestore.googleapis.com/v1/projects/proj/databases/db/documents/users/user123/orders")
   }
+
+  @Test func customBaseURL() throws {
+    let config = FirestoreConfig(
+      projectId: "proj",
+      databaseId: "db",
+      accessToken: "token",
+      baseURL: "http://localhost:8080/v1"
+    )
+    let req = try config.makeRequest(path: "users")
+    #expect(req.url!.absoluteString == "http://localhost:8080/v1/projects/proj/databases/db/documents/users")
+  }
+
+  @Test func trailingSlashInBaseURLIsIgnored() throws {
+    let config = FirestoreConfig(
+      projectId: "proj",
+      databaseId: "db",
+      accessToken: "token",
+      baseURL: "http://localhost:8080/v1/"
+    )
+    let req = try config.makeRequest(path: "users")
+    #expect(req.url!.absoluteString == "http://localhost:8080/v1/projects/proj/databases/db/documents/users")
+  }
+
+  @Test func queryItemsAreAppended() throws {
+    let config = FirestoreConfig(projectId: "proj", accessToken: "token")
+    let req = try config.makeRequest(path: "users", queryItems: [
+      URLQueryItem(name: "pageSize", value: "10"),
+      URLQueryItem(name: "pageToken", value: "abc"),
+    ])
+    #expect(req.url!.query?.contains("pageSize=10") == true)
+    #expect(req.url!.query?.contains("pageToken=abc") == true)
+  }
+
+  @Test func encodesSpecialCharactersInPathSegments() throws {
+    let config = FirestoreConfig(projectId: "proj", accessToken: "token")
+    let req = try config.makeRequest(path: "users/alice smith#1")
+    #expect(req.url!.absoluteString.hasSuffix("/documents/users/alice%20smith%231"))
+  }
+
+  @Test func listCollectionIdsURLs() throws {
+    let config = FirestoreConfig(projectId: "proj", databaseId: "db", accessToken: "token")
+
+    let root = try config.listCollectionIdsURL(parentPath: nil)
+    #expect(root.absoluteString == "https://firestore.googleapis.com/v1/projects/proj/databases/db/documents:listCollectionIds")
+
+    let nested = try config.listCollectionIdsURL(parentPath: "users/alice smith")
+    #expect(nested.absoluteString == "https://firestore.googleapis.com/v1/projects/proj/databases/db/documents/users/alice%20smith:listCollectionIds")
+  }
 }
 
 @Suite("Authentication")
@@ -197,6 +245,72 @@ struct NetworkTests {
       #expect(page.items.count == 1)
       #expect(page.nextPageToken == nil)
       #expect(page.items[0].name == "Charlie")
+    }
+  }
+
+  @Test func fetchWithQueryItems() async throws {
+    try await MockURLProtocol.withHandler({ request in
+      let url = request.url!.absoluteString
+      #expect(url.contains("pageSize=25"))
+      #expect(url.contains("pageToken=tok"))
+      return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, self.listJSON)
+    }) {
+      let config = FirestoreConfig(projectId: "p", accessToken: "tok")
+      let db = FirestoreDocument(config: config)
+      let data = try await db.fetch(from: "users", queryItems: [
+        URLQueryItem(name: "pageSize", value: "25"),
+        URLQueryItem(name: "pageToken", value: "tok"),
+      ])
+      #expect(!data.isEmpty)
+    }
+  }
+
+  @Test func listCollectionIdsAtRoot() async throws {
+    let responseJSON = """
+    {"collectionIds":["users","orders"],"nextPageToken":"token2"}
+    """.data(using: .utf8)!
+
+    try await MockURLProtocol.withHandler({ request in
+      #expect(request.httpMethod == "POST")
+      #expect(request.url!.absoluteString == "https://firestore.googleapis.com/v1/projects/p/databases/(default)/documents:listCollectionIds")
+      return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, responseJSON)
+    }) {
+      let config = FirestoreConfig(projectId: "p", accessToken: "tok")
+      let db = FirestoreDocument(config: config)
+      let page = try await db.listCollectionIds()
+      #expect(page.collectionIds == ["users", "orders"])
+      #expect(page.nextPageToken == "token2")
+    }
+  }
+
+  @Test func listCollectionIdsUnderDocument() async throws {
+    let responseJSON = """
+    {"collectionIds":["orders"]}
+    """.data(using: .utf8)!
+
+    try await MockURLProtocol.withHandler({ request in
+      #expect(request.url!.absoluteString == "https://firestore.googleapis.com/v1/projects/p/databases/(default)/documents/users/alice:listCollectionIds")
+      return (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, responseJSON)
+    }) {
+      let config = FirestoreConfig(projectId: "p", accessToken: "tok")
+      let db = FirestoreDocument(config: config)
+      let page = try await db.listCollectionIds(parent: "users/alice")
+      #expect(page.collectionIds == ["orders"])
+      #expect(page.nextPageToken == nil)
+    }
+  }
+
+  @Test func emptyListCollectionIdsResponse() async throws {
+    let responseJSON = Data("{}".utf8)
+
+    try await MockURLProtocol.withHandler({ request in
+      (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, responseJSON)
+    }) {
+      let config = FirestoreConfig(projectId: "p", accessToken: "tok")
+      let db = FirestoreDocument(config: config)
+      let page = try await db.listCollectionIds()
+      #expect(page.collectionIds.isEmpty)
+      #expect(page.nextPageToken == nil)
     }
   }
 

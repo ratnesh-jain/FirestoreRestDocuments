@@ -19,8 +19,16 @@ let package = Package(
       name: "FirestoreRestDocumentsDependencies",
       targets: ["FirestoreRestDocumentsDependencies"]
     ),
+    .executable(
+      name: "frd",
+      targets: ["FirestoreCLI"]
+    ),
   ],
   dependencies: [
+    .package(
+      url: "https://github.com/apple/swift-argument-parser",
+      from: "1.5.0"
+    ),
     .package(
       url: "https://github.com/pointfreeco/swift-dependencies",
       from: "1.2.0"
@@ -50,12 +58,32 @@ let package = Package(
         .product(name: "Dependencies", package: "swift-dependencies"),
       ]
     ),
+    .target(
+      name: "FirestoreCLICore",
+      dependencies: [
+        "FirestoreRestDocuments",
+        .product(name: "ArgumentParser", package: "swift-argument-parser"),
+        .product(name: "Logging", package: "swift-log"),
+      ]
+    ),
+    .executableTarget(
+      name: "FirestoreCLI",
+      dependencies: ["FirestoreCLICore"]
+    ),
     .testTarget(
       name: "FirestoreRestDocumentsTests",
       dependencies: [
         "FirestoreRestDocuments",
         "FirestoreRestDocumentsDependencies",
         .product(name: "Dependencies", package: "swift-dependencies"),
+      ]
+    ),
+    .testTarget(
+      name: "FirestoreCLICoreTests",
+      dependencies: [
+        "FirestoreCLICore",
+        "FirestoreRestDocuments",
+        .product(name: "ArgumentParser", package: "swift-argument-parser"),
       ]
     ),
   ]

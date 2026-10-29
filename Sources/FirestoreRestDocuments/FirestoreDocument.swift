@@ -72,9 +72,13 @@ public struct FirestoreDocument: Sendable {
   }
 
   public func fetch(from path: String) async throws -> Data {
+    try await fetch(from: path, queryItems: [])
+  }
+
+  public func fetch(from path: String, queryItems: [URLQueryItem]) async throws -> Data {
     logger.debug("Fetching from path: \(path)")
     let accessToken = try await config.resolveAccessToken()
-    let request = try config.makeRequest(path: path, accessToken: accessToken)
+    let request = try config.makeRequest(path: path, queryItems: queryItems, accessToken: accessToken)
     logger.debug("Request URL: \(request.url?.absoluteString ?? "nil")")
     let (data, response) = try await URLSession.shared.data(for: request)
 
@@ -175,6 +179,50 @@ public struct FirestoreDocument: Sendable {
     try await FirestoreDocument().batchWrite(writes: writes, labels: labels)
   }
 
+  // MARK: - Collections
+
+  public static func listCollectionIds(
+    parent: String? = nil,
+    pageSize: Int? = nil,
+    pageToken: String? = nil
+  ) async throws -> FirestoreCollectionIdsPage {
+    try await FirestoreDocument().listCollectionIds(
+      parent: parent,
+      pageSize: pageSize,
+      pageToken: pageToken
+    )
+  }
+
+  public func listCollectionIds(
+    parent: String? = nil,
+    pageSize: Int? = nil,
+    pageToken: String? = nil
+  ) async throws -> FirestoreCollectionIdsPage {
+    logger.debug("ListCollectionIds under \(parent ?? "root")")
+    var body: [String: Any] = [:]
+    if let pageSize { body["pageSize"] = pageSize }
+    if let pageToken { body["pageToken"] = pageToken }
+    let bodyData = try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
+    let accessToken = try await config.resolveAccessToken()
+    var request = config.makeRequest(
+      url: try config.listCollectionIdsURL(parentPath: parent),
+      accessToken: accessToken
+    )
+    request.httpMethod = "POST"
+    request.httpBody = bodyData
+
+    let (data, response) = try await URLSession.shared.data(for: request)
+    guard let httpResponse = response as? HTTPURLResponse else {
+      throw FirestoreParsingError.decodingFailed("Invalid response")
+    }
+    guard (200...299).contains(httpResponse.statusCode) else {
+      let body = String(data: data, encoding: .utf8) ?? "<empty>"
+      throw FirestoreParsingError.decodingFailed("HTTP \(httpResponse.statusCode): \(body)")
+    }
+
+    return try JSONDecoder().decode(FirestoreCollectionIdsPage.self, from: data)
+  }
+
   // MARK: - Batch Operations
 
   public func batchGet(
@@ -210,7 +258,7 @@ public struct FirestoreDocument: Sendable {
     transaction: String? = nil
   ) async throws -> FirestoreCommitResponse {
     logger.debug("Commit \(writes.count) write(s)")
-    let body = try buildCommitBody(writes: writes, transaction: transaction)
+    let body = try makeCommitBody(writes: writes, transaction: transaction)
     let accessToken = try await config.resolveAccessToken()
     var request = config.makeRequest(url: config.commitURL, accessToken: accessToken)
     request.httpMethod = "POST"
@@ -233,7 +281,7 @@ public struct FirestoreDocument: Sendable {
     labels: [String: String]? = nil
   ) async throws -> FirestoreBatchWriteResponse {
     logger.debug("BatchWrite \(writes.count) write(s)")
-    let body = try buildBatchWriteBody(writes: writes, labels: labels)
+    let body = try makeBatchWriteBody(writes: writes, labels: labels)
     let accessToken = try await config.resolveAccessToken()
     var request = config.makeRequest(url: config.batchWriteURL, accessToken: accessToken)
     request.httpMethod = "POST"
@@ -300,7 +348,9 @@ public struct FirestoreDocument: Sendable {
 
   // MARK: - Private Helpers
 
-  private func buildCommitBody(writes: [FirestoreWrite], transaction: String?) throws -> Data {
+  /// Builds the JSON body used by the `commit` endpoint. Useful for inspecting
+  /// or logging the exact request payload (for example, a CLI `--dry-run`).
+  public func makeCommitBody(writes: [FirestoreWrite], transaction: String? = nil) throws -> Data {
     var writesJSON: [[String: Any]] = []
     for write in writes {
       writesJSON.append(try serializeWrite(write))
@@ -312,7 +362,8 @@ public struct FirestoreDocument: Sendable {
     return try JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
   }
 
-  private func buildBatchWriteBody(writes: [FirestoreWrite], labels: [String: String]?) throws -> Data {
+  /// Builds the JSON body used by the `batchWrite` endpoint.
+  public func makeBatchWriteBody(writes: [FirestoreWrite], labels: [String: String]? = nil) throws -> Data {
     var writesJSON: [[String: Any]] = []
     for write in writes {
       writesJSON.append(try serializeWrite(write))
@@ -331,20 +382,30 @@ public struct FirestoreDocument: Sendable {
       return ["delete": fullPath]
 
     case .create(let fieldsData):
-      let fields = try JSONSerialization.jsonObject(with: fieldsData) as! [String: Any]
-      return ["update": ["name": fullPath, "fields": fields]]
+      let fields = try fieldsDictionary(from: fieldsData)
+      return [
+        "update": ["name": fullPath, "fields": fields],
+        "currentDocument": ["exists": false],
+      ]
 
     case .update(let fieldsData, let updateMask, let exists):
-      let fields = try JSONSerialization.jsonObject(with: fieldsData) as! [String: Any]
-      var document: [String: Any] = ["name": fullPath, "fields": fields]
+      let fields = try fieldsDictionary(from: fieldsData)
+      var writeJSON: [String: Any] = ["update": ["name": fullPath, "fields": fields]]
       if let updateMask {
-        document["updateMask"] = ["fieldPaths": updateMask]
+        writeJSON["updateMask"] = ["fieldPaths": updateMask]
       }
       if let exists {
-        document["currentDocument"] = ["exists": exists]
+        writeJSON["currentDocument"] = ["exists": exists]
       }
-      return ["update": document]
+      return writeJSON
     }
+  }
+
+  private func fieldsDictionary(from data: Data) throws -> [String: Any] {
+    guard let fields = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+      throw FirestoreParsingError.encodingFailed("Encoded document fields must be a JSON object")
+    }
+    return fields
   }
 }
 

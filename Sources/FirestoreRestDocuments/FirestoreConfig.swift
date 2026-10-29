@@ -10,8 +10,10 @@ public struct FirestoreConfig: Sendable {
   public var accessToken: String?
   public var apiKey: String?
   public var accessTokenProvider: (any FirestoreAccessTokenProvider)?
+  /// Base URL for the Firestore REST API. Override this to target an emulator.
+  public var baseURL: String
 
-  private static let defaultBaseURL = "https://firestore.googleapis.com/v1"
+  public static let defaultBaseURL = "https://firestore.googleapis.com/v1"
 
   nonisolated(unsafe) public static var shared = FirestoreConfig(projectId: "")
 
@@ -20,13 +22,15 @@ public struct FirestoreConfig: Sendable {
     databaseId: String = "(default)",
     accessToken: String? = nil,
     apiKey: String? = nil,
-    accessTokenProvider: (any FirestoreAccessTokenProvider)? = nil
+    accessTokenProvider: (any FirestoreAccessTokenProvider)? = nil,
+    baseURL: String = FirestoreConfig.defaultBaseURL
   ) {
     self.projectId = projectId
     self.databaseId = databaseId
     self.accessToken = accessToken
     self.apiKey = apiKey
     self.accessTokenProvider = accessTokenProvider ?? (accessToken.map { StaticAccessTokenProvider(token: $0) })
+    self.baseURL = baseURL
   }
 
   public func resolveAccessToken() async throws -> String? {
@@ -82,7 +86,7 @@ public struct FirestoreConfig: Sendable {
   }
 
   var documentsBaseURL: String {
-    "\(Self.defaultBaseURL)/projects/\(projectId)/databases/\(databaseId)/documents"
+    "\(Self.normalizedBaseURL(baseURL))/projects/\(Self.percentEncodedComponent(projectId))/databases/\(Self.percentEncodedComponent(databaseId))/documents"
   }
 
   func makeRequest(path: String, queryItems: [URLQueryItem] = [], accessToken: String? = nil) throws -> URLRequest {
@@ -105,7 +109,9 @@ public struct FirestoreConfig: Sendable {
         """
       )
     }
-    var url = URL(string: "\(documentsBaseURL)/\(path)")!
+    guard var url = URL(string: "\(documentsBaseURL)/\(Self.percentEncodedPath(path))") else {
+      throw FirestoreParsingError.invalidDocumentData("Could not build a URL for path '\(path)'.")
+    }
     let resolvedAccessToken = accessToken ?? self.accessToken
     var items = queryItems
     if let key = apiKey, resolvedAccessToken == nil {
@@ -115,7 +121,7 @@ public struct FirestoreConfig: Sendable {
       guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
         throw FirestoreParsingError.invalidDocumentData("Invalid URL")
       }
-      components.queryItems = items
+      components.queryItems = (components.queryItems ?? []) + items
       url = components.url!
     }
     var req = URLRequest(url: url)
@@ -137,18 +143,51 @@ public struct FirestoreConfig: Sendable {
   }
 
   var batchGetURL: URL {
-    URL(string: "\(Self.defaultBaseURL)/projects/\(projectId)/databases/\(databaseId)/documents:batchGet")!
+    URL(string: "\(Self.normalizedBaseURL(baseURL))/projects/\(Self.percentEncodedComponent(projectId))/databases/\(Self.percentEncodedComponent(databaseId))/documents:batchGet")!
   }
 
   var commitURL: URL {
-    URL(string: "\(Self.defaultBaseURL)/projects/\(projectId)/databases/\(databaseId)/documents:commit")!
+    URL(string: "\(Self.normalizedBaseURL(baseURL))/projects/\(Self.percentEncodedComponent(projectId))/databases/\(Self.percentEncodedComponent(databaseId))/documents:commit")!
   }
 
   var batchWriteURL: URL {
-    URL(string: "\(Self.defaultBaseURL)/projects/\(projectId)/databases/\(databaseId)/documents:batchWrite")!
+    URL(string: "\(Self.normalizedBaseURL(baseURL))/projects/\(Self.percentEncodedComponent(projectId))/databases/\(Self.percentEncodedComponent(databaseId))/documents:batchWrite")!
+  }
+
+  func listCollectionIdsURL(parentPath: String?) throws -> URL {
+    let base = documentsBaseURL
+    let parent: String
+    if let parentPath, !parentPath.isEmpty {
+      parent = "\(base)/\(Self.percentEncodedPath(parentPath))"
+    } else {
+      parent = base
+    }
+    guard let url = URL(string: "\(parent):listCollectionIds") else {
+      throw FirestoreParsingError.invalidDocumentData(
+        "Could not build a URL for parent '\(parentPath ?? "root")'."
+      )
+    }
+    return url
   }
 
   func fullDocumentPath(for relativePath: String) -> String {
-    "projects/\(projectId)/databases/\(databaseId)/documents/\(relativePath)"
+    let trimmed = relativePath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    return "projects/\(projectId)/databases/\(databaseId)/documents/\(trimmed)"
+  }
+
+  private static func normalizedBaseURL(_ value: String) -> String {
+    value.hasSuffix("/") ? String(value.dropLast()) : value
+  }
+
+  /// Percent-encodes each path segment while keeping the separators intact.
+  private static func percentEncodedPath(_ path: String) -> String {
+    path
+      .split(separator: "/", omittingEmptySubsequences: false)
+      .map { percentEncodedComponent(String($0)) }
+      .joined(separator: "/")
+  }
+
+  private static func percentEncodedComponent(_ value: String) -> String {
+    value.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? value
   }
 }

@@ -13,6 +13,7 @@ Parse Firestore documents directly from the [Firestore REST API](https://firebas
 - **Property wrappers** — `@DocumentID`, `@ServerTimestamp`, `@ExplicitNull` (same API as the Firebase iOS SDK)
 - **Encoding** — encode Swift models back to Firestore REST wire format
 - **Write operations** — `commit`, `batchWrite`, `batchGet`, and a `FirestoreBatch` builder for create/update/delete via the REST API
+- **Command-line tool** — `frd` for reading, writing, deleting, batching, and listing collections from a terminal or shell script
 - **Dependencies** — `swift-log` and `swift-crypto` for the base library; optional `swift-dependencies` integration via separate product
 - **Service account auth** — mint and auto-refresh OAuth2 tokens from a service account JSON key
 
@@ -36,6 +37,7 @@ Or add via Xcode: **File → Add Package Dependencies...** → paste the URL.
 |---|---|---|
 | `FirestoreRestDocuments` | `import FirestoreRestDocuments` | Base library (depends on `swift-log`) |
 | `FirestoreRestDocumentsDependencies` | `import FirestoreRestDocumentsDependencies` | Adds [swift-dependencies](https://github.com/pointfreeco/swift-dependencies) integration |
+| `frd` | — | Command-line executable for reading and writing documents |
 
 Add the product you need to your target:
 
@@ -162,6 +164,8 @@ batch.delete(at: "users/old")
 let result = try await batch.commit(using: db)
 ```
 
+`create` sends `currentDocument.exists = false`, so it fails if the document already exists. Use `update` (with no update mask) for an upsert.
+
 `batchWrite` is the non-transactional variant (per-write status reporting):
 
 ```swift
@@ -197,6 +201,7 @@ let config = FirestoreConfig(
 - `accessToken` — sent as `Authorization: Bearer <token>`. Use a Firebase Auth ID token or Google OAuth2 token.
 - `apiKey` — appended as `?key=<apiKey>` query parameter. Simpler but less secure.
 - `accessToken` takes priority when both are set.
+- `baseURL` — defaults to `https://firestore.googleapis.com/v1`; set it to target the Firestore emulator or a proxy.
 
 ### Service account authentication (automatic token refresh)
 
@@ -471,6 +476,154 @@ let db = FirestoreDocument.live
 let users = try await db.decode([User].self, from: "users")
 ```
 
+## Command-Line Tool
+
+The package includes an `frd` (short for FirestoreRestDocuments) executable so the same REST operations can be used from a terminal or shell script.
+
+```bash
+swift run frd --help
+
+# Build a standalone binary
+swift build -c release
+.build/release/frd --help
+```
+
+### Commands
+
+| Command | Description |
+|---|---|
+| `get <document>` | Fetch one document and print its fields as JSON. |
+| `list <collection>` | List documents (one page by default; `--all` follows `nextPageToken`). |
+| `collections` | List collection paths at the database root, or under `--parent <document>`. |
+| `set <path>` | Create or replace a document. Supports `--merge`, `--mask`, `--create-only`, `--if-exists`. |
+| `update <document>` | Merge the provided top-level fields. Supports `--mask`, `--replace`, `--if-exists`. |
+| `delete <document...>` | Delete one or more documents atomically. |
+| `batch-get <document...>` | Fetch multiple documents in one request. |
+| `batch-write` | Apply a JSON batch of create/set/update/delete operations. |
+
+Shared options (`--project`, `--token`, `--service-account`, output flags, and so on) are accepted by every subcommand; place them after the subcommand name:
+
+```bash
+frd get users/alice --project my-project --token "$(gcloud auth print-access-token)"
+```
+
+### Authentication
+
+Credentials are resolved in this order:
+
+1. `--token <token>` or `FIRESTORE_ACCESS_TOKEN` / `GOOGLE_OAUTH_ACCESS_TOKEN`
+2. `--token-file <path>`
+3. `--service-account <key.json>` or `GOOGLE_APPLICATION_CREDENTIALS`
+4. `--api-key <key>` or `FIRESTORE_API_KEY` / `GOOGLE_API_KEY`
+
+The project ID comes from `--project`, `FIRESTORE_PROJECT_ID`, `GOOGLE_CLOUD_PROJECT`, `GCLOUD_PROJECT`, or the service account's `project_id`. The database defaults to `(default)`; override it with `--database` or `FIRESTORE_DATABASE_ID`.
+
+These environment variables are read by every command; explicit flags always take precedence:
+
+| Variable | Used for | Notes |
+|---|---|---|
+| `FIRESTORE_PROJECT_ID` | Project ID | Highest-priority environment fallback. |
+| `GOOGLE_CLOUD_PROJECT` | Project ID | Used when `FIRESTORE_PROJECT_ID` is unset. |
+| `GCLOUD_PROJECT` | Project ID | Last project fallback before the service account's `project_id`. |
+| `FIRESTORE_DATABASE_ID` | Database ID | Defaults to `(default)`. |
+| `FIRESTORE_ACCESS_TOKEN` | Access token | Sent as `Authorization: Bearer <token>`. |
+| `GOOGLE_OAUTH_ACCESS_TOKEN` | Access token | Fallback for `FIRESTORE_ACCESS_TOKEN`. |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Service account key path | Used when no access token is set. |
+| `FIRESTORE_API_KEY` | API key | Sent as `?key=`, only when no token is available. |
+| `GOOGLE_API_KEY` | API key | Fallback for `FIRESTORE_API_KEY`. |
+| `FIRESTORE_EMULATOR_HOST` | Emulator host | For example `localhost:8080`; overrides the base URL. |
+| `FIRESTORE_LOG_LEVEL` | Log level | For example `debug`, `info`, or `error`. |
+
+`--token-file` has no environment variable; pass the path with the flag.
+
+```bash
+# Service account (tokens are minted and refreshed automatically)
+frd list users --project my-project --service-account ~/keys/service-account.json
+
+# Environment variables
+export FIRESTORE_PROJECT_ID=my-project
+export FIRESTORE_ACCESS_TOKEN="$(gcloud auth print-access-token)"
+frd get users/alice
+
+# Firestore emulator
+frd get users/alice --project demo --emulator-host localhost:8080
+# or: export FIRESTORE_EMULATOR_HOST=localhost:8080
+```
+
+`--verbose` prints library debug logs to stderr. JSON output always goes to stdout, so commands compose with `jq` and other tools.
+
+### Reading
+
+```bash
+frd get users/alice
+frd get users/alice --raw > alice.json        # unmodified REST response
+frd list users --limit 10 --compact
+frd list users --all
+frd list users/alice/orders --page-size 25 --page-token "$TOKEN"
+frd batch-get users/alice users/bob --mask name,email
+frd collections                                # top-level collections
+frd collections --parent users/alice --all     # subcollections of a document
+```
+
+`get` prints only the document's fields. `list` prints an array of `{ id, name, createTime, updateTime, data }` objects. `batch-get` prints an array in request order, with `"found": true/false` and a `data` object for documents that exist. `collections` prints a JSON array of collection paths, such as `["users","orders"]` or `["users/alice/orders"]` when `--parent` is used; pass `--all` or `--limit` to follow pagination, and `--raw` for the unmodified `listCollectionIds` response.
+
+### Writing
+
+Data is read from `--data`, `--file`, or stdin. Numbers, booleans, strings, nulls, arrays, and nested objects map to the matching Firestore types. Use `set` to replace a document, or `--merge` to write only the provided top-level fields:
+
+```bash
+frd set users/alice --project p --data '{"name":"Alice","age":30}'
+frd set users/alice --project p --merge --data '{"age":31}'
+frd set users --project p --merge --data '{"name":"Alice"}'   # generated document ID
+frd update users/alice --project p --mask name,email --data '{"name":"Alice","email":"a@example.com"}'
+echo '{"active":true}' | frd update users/alice --project p
+frd delete users/alice users/bob --project p
+```
+
+- `set` replaces the document; fields that are not in the payload are removed. `--merge` or `--mask` makes it a partial update.
+- `set` with a collection path (for example `users`) generates a document ID and prints the resulting path. Use `--id` to choose the ID.
+- `--create-only` fails when the document already exists; `--if-exists` fails when it does not.
+- `--dry-run` prints the exact `documents:commit` (or `:batchWrite`) request body without sending it, so it works without credentials as long as a project ID is known.
+
+#### Typed values
+
+Flat JSON cannot express Firestore timestamps, references, geo points, or bytes. Use these single-key objects; `get --raw` output (and `{"fields": {...}}` documents) can also be written back directly, preserving all types:
+
+```json
+{
+  "createdAt": {"$timestamp": "2024-06-15T10:30:00Z"},
+  "owner": {"$reference": "users/alice"},
+  "location": {"$geopoint": {"latitude": 37.77, "longitude": -122.42}},
+  "avatar": {"$bytes": "SGVsbG8="},
+  "count": {"$integer": "42"},
+  "ratio": {"$double": 1.5},
+  "metadata": {"$literal": {"$timestamp": "this is a normal field name"}}
+}
+```
+
+`$reference` accepts either a full `projects/.../documents/...` path or a short `collection/document` path relative to the configured project and database.
+
+### Batch writes
+
+```bash
+frd batch-write --project p --file operations.json
+cat operations.json | frd batch-write --project p --non-atomic --label env=prod
+```
+
+```json
+[
+  {"op": "create", "path": "users/u1", "data": {"name": "Alice"}},
+  {"op": "update", "path": "users/u1", "data": {"name": "Bob"}, "mask": ["name"]},
+  {"op": "set", "path": "users/u2", "data": {"name": "Carol"}},
+  {"op": "delete", "path": "users/u3"}
+]
+```
+
+- Operations are committed atomically by default. `--non-atomic` uses `batchWrite`, which returns a per-write status and accepts `--label key=value`.
+- For `update`, the default mask is the provided top-level fields; set `"replace": true` or provide `"mask"` to change that. For `set`, `"mask"` is optional.
+- `"exists": true/false` adds a precondition to `set`/`update` operations.
+- An object with a `"writes"` array is also accepted instead of a bare array.
+
 ## Logging
 
 The package uses [swift-log](https://github.com/apple/swift-log) for all internal logging with the label `com.firestorerestdocuments`.
@@ -542,9 +695,18 @@ FirestoreRestDocumentsDependencies/ (depends on base + swift-dependencies)
 ├── FirestoreClient+Dependency  # @Dependency(\.firestoreClient) registration
 ├── FirestoreConfig+Dependency # @Dependency(\.defaultFirestoreConfig) registration
 └── FirestoreDocument+Dependency # FirestoreDocument.live convenience
+
+FirestoreCLICore/ (depends on base + swift-argument-parser)
+├── FirestoreCommand         # root command and subcommand list
+├── GlobalOptions            # auth/config/output flags and environment fallback
+├── Commands/                # get, list, collections, set, update, delete, batch-get, batch-write
+└── Support/                 # JSON conversion, path validation, output
+
+FirestoreCLI/ (executable)
+└── EntryPoint               # bootstraps swift-log and runs FirestoreCommand
 ```
 
-The package has **four layers**:
+The package has **five layers**:
 
 1. **Normalizer** — recursively unwraps `{"stringValue": "Alice"}` → `"Alice"`, then passes flat JSON to `JSONDecoder`. Best when you don't need property wrappers.
 
@@ -553,6 +715,8 @@ The package has **four layers**:
 3. **Unified API** — `FirestoreDocument` combines URL construction, authentication, async networking, and decoding into one call.
 
 4. **Dependencies** — protocol-based `FirestoreClient` with live/mock implementations, registered as `@Dependency` values for clean DI and testability.
+
+5. **Command-line tool** — `frd` wraps the unified API with subcommands, environment-based credential discovery, JSON output, and batch-file support.
 
 ## Limitations
 
