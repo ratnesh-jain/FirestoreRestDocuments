@@ -4,7 +4,7 @@ import FirestoreRestDocuments
 
 /// Converts between plain JSON documents, Firestore's typed REST wire format,
 /// and the CLI's output representation.
-enum DocumentPayload {
+public enum DocumentPayload {
   private static let wireDocumentKeys: Set<String> = ["fields", "name", "createTime", "updateTime"]
 
   private static let valueKeys: Set<String> = [
@@ -23,14 +23,14 @@ enum DocumentPayload {
 
   // MARK: - Input
 
-  static func fields(from data: Data, config: FirestoreConfig) throws -> [String: Any] {
+  public static func fields(from data: Data, config: FirestoreConfig) throws -> [String: Any] {
     let json = try JSONParsing.any(from: data, context: "document data")
     return try fields(fromJSON: json, config: config)
   }
 
-  static func fields(fromJSON json: Any, config: FirestoreConfig) throws -> [String: Any] {
+  public static func fields(fromJSON json: Any, config: FirestoreConfig) throws -> [String: Any] {
     guard let object = json as? [String: Any] else {
-      throw CLIError("Document data must be a JSON object mapping field names to values.")
+      throw FirestoreOperationError("Document data must be a JSON object mapping field names to values.")
     }
 
     if isWireDocument(object) {
@@ -40,27 +40,46 @@ enum DocumentPayload {
     return try object.mapValues { try typedValue($0, config: config, interpretTags: true) }
   }
 
-  static func fieldsData(_ fields: [String: Any]) throws -> Data {
+  public static func fieldsData(_ fields: [String: Any]) throws -> Data {
     guard JSONSerialization.isValidJSONObject(fields) else {
-      throw CLIError("Document data is not valid JSON.")
+      throw FirestoreOperationError("Document data is not valid JSON.")
     }
     return try JSONSerialization.data(withJSONObject: fields, options: [.sortedKeys])
   }
 
   /// Converts a document's typed `fields` map to plain JSON for display.
-  static func normalizedFields(_ fields: [String: Any]) throws -> [String: Any] {
+  public static func normalizedFields(_ fields: [String: Any]) throws -> [String: Any] {
     do {
       let normalized = try FirestoreNormalizer.normalize(["fields": fields])
       return normalized as? [String: Any] ?? [:]
     } catch {
-      throw CLIError("Could not normalize document fields: \(error.localizedDescription)")
+      throw FirestoreOperationError("Could not normalize document fields: \(error.localizedDescription)")
     }
+  }
+
+  /// Builds the `{ id, name, createTime, updateTime, data }` summary used by
+  /// `frd list` and the MCP list tool.
+  public static func summary(fromWireDocument document: [String: Any]) throws -> [String: Any] {
+    var item: [String: Any] = [:]
+    if let name = document["name"] as? String {
+      item["id"] = FirestorePath.documentID(fromFullName: name)
+      item["name"] = name
+    }
+    if let createTime = document["createTime"] as? String {
+      item["createTime"] = createTime
+    }
+    if let updateTime = document["updateTime"] as? String {
+      item["updateTime"] = updateTime
+    }
+    let fields = document["fields"] as? [String: Any] ?? [:]
+    item["data"] = try normalizedFields(fields)
+    return item
   }
 
   // MARK: - Output values
 
   /// Converts a decoded `FirestoreValue` to a plain JSON-compatible value.
-  static func flatValue(_ value: FirestoreValue) -> Any {
+  public static func flatValue(_ value: FirestoreValue) -> Any {
     switch value {
     case .null:
       return NSNull()
@@ -98,7 +117,7 @@ enum DocumentPayload {
 
   /// True when the JSON looks like a Firestore document (`{"fields": {...}}`)
   /// rather than a flat map of field names to values.
-  static func isWireDocument(_ object: [String: Any]) -> Bool {
+  public static func isWireDocument(_ object: [String: Any]) -> Bool {
     guard let fields = object["fields"] as? [String: Any] else { return false }
     guard object.keys.allSatisfy(wireDocumentKeys.contains) else { return false }
     guard !fields.isEmpty else { return true }
@@ -146,7 +165,7 @@ enum DocumentPayload {
       return ["mapValue": ["fields": fields]]
     }
 
-    throw CLIError("Unsupported JSON value: \(value)")
+    throw FirestoreOperationError("Unsupported JSON value: \(value)")
   }
 
   // MARK: - Typed value tags
@@ -166,16 +185,16 @@ enum DocumentPayload {
     switch tag {
     case "$timestamp":
       guard let string = value as? String else {
-        throw CLIError("$timestamp expects a string, for example {\"$timestamp\": \"2024-06-15T10:30:00Z\"}.")
+        throw FirestoreOperationError("$timestamp expects a string, for example {\"$timestamp\": \"2024-06-15T10:30:00Z\"}.")
       }
       guard isValidTimestamp(string) else {
-        throw CLIError("Invalid $timestamp '\(string)'. Use an ISO 8601 / RFC 3339 value.")
+        throw FirestoreOperationError("Invalid $timestamp '\(string)'. Use an ISO 8601 / RFC 3339 value.")
       }
       return ["timestampValue": string]
 
     case "$reference":
       guard let string = value as? String, !string.isEmpty else {
-        throw CLIError("$reference expects a document path string.")
+        throw FirestoreOperationError("$reference expects a document path string.")
       }
       let trimmed = string.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
       let fullPath = trimmed.hasPrefix("projects/")
@@ -195,11 +214,11 @@ enum DocumentPayload {
          let longitude = number(coordinates[1]) {
         return ["geoPointValue": ["latitude": latitude, "longitude": longitude]]
       }
-      throw CLIError("$geopoint expects {\"latitude\": .., \"longitude\": ..} or [lat, lon].")
+      throw FirestoreOperationError("$geopoint expects {\"latitude\": .., \"longitude\": ..} or [lat, lon].")
 
     case "$bytes":
       guard let string = value as? String, Data(base64Encoded: string) != nil else {
-        throw CLIError("$bytes expects a base64-encoded string.")
+        throw FirestoreOperationError("$bytes expects a base64-encoded string.")
       }
       return ["bytesValue": string]
 
@@ -207,17 +226,17 @@ enum DocumentPayload {
       let int: Int64
       if let string = value as? String {
         guard let parsed = Int64(string) else {
-          throw CLIError("$integer expects a whole number or a numeric string.")
+          throw FirestoreOperationError("$integer expects a whole number or a numeric string.")
         }
         int = parsed
       } else if let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() {
         let double = number.doubleValue
         guard double == double.rounded(), double >= Double(Int64.min), double <= Double(Int64.max) else {
-          throw CLIError("$integer expects a whole number.")
+          throw FirestoreOperationError("$integer expects a whole number.")
         }
         int = Int64(double)
       } else {
-        throw CLIError("$integer expects a whole number or a numeric string.")
+        throw FirestoreOperationError("$integer expects a whole number or a numeric string.")
       }
       return ["integerValue": String(int)]
 
@@ -228,11 +247,11 @@ enum DocumentPayload {
       if let string = value as? String, let double = Double(string) {
         return ["doubleValue": double]
       }
-      throw CLIError("$double expects a number or a numeric string.")
+      throw FirestoreOperationError("$double expects a number or a numeric string.")
 
     case "$literal":
       guard let object = value as? [String: Any] else {
-        throw CLIError("$literal expects a JSON object.")
+        throw FirestoreOperationError("$literal expects a JSON object.")
       }
       let fields = try object.mapValues {
         try typedValue($0, config: config, interpretTags: false)
@@ -240,7 +259,7 @@ enum DocumentPayload {
       return ["mapValue": ["fields": fields]]
 
     default:
-      throw CLIError(
+      throw FirestoreOperationError(
         """
         Unknown typed value '\(tag)'. Supported tags: \(tagNames.joined(separator: ", ")). \
         Use {"$literal": {...}} to write a map containing a '$' key.

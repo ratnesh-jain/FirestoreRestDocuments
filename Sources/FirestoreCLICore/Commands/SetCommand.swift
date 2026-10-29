@@ -1,3 +1,4 @@
+import FirestoreOperations
 import ArgumentParser
 import Foundation
 import FirestoreRestDocuments

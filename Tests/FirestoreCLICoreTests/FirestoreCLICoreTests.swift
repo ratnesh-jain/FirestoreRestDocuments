@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import FirestoreCLICore
+import FirestoreOperations
 import FirestoreRestDocuments
 
 private func makeConfig() -> FirestoreConfig {

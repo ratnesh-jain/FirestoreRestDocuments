@@ -1,3 +1,4 @@
+import FirestoreOperations
 import Foundation
 import FirestoreRestDocuments
 

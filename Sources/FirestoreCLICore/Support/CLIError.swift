@@ -1,12 +1,5 @@
-import Foundation
+import FirestoreOperations
 
-/// A user-facing error. ArgumentParser prints `description` and exits with code 1.
-struct CLIError: Error, CustomStringConvertible {
-  let message: String
-
-  init(_ message: String) {
-    self.message = message
-  }
-
-  var description: String { message }
-}
+/// CLI-facing name for the shared operation error. ArgumentParser prints
+/// `description` and exits with code 1.
+typealias CLIError = FirestoreOperationError
