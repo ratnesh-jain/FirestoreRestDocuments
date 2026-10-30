@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="theme-color" content="#fbfbfd" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0a0a0c" media="(prefers-color-scheme: dark)" />
+  <title>FirestoreRestDocuments — Parse Firestore REST responses into native Swift types</title>
+  <meta name="description" content="Parse Firestore documents directly from the Firestore REST API responses into native Swift Decodable types — no Firebase SDK required. Unified async API, property wrappers, encoding, writes, CLI, and MCP server." />
+  <meta property="og:title" content="FirestoreRestDocuments" />
+  <meta property="og:description" content="No Firebase SDK required. Decode Firestore REST responses into native Swift types." />
+  <meta property="og:type" content="website" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <script>document.documentElement.classList.add('js');</script>
+</head>
+<body>
+  <!-- Translucent nav -->
+  <header class="nav" id="nav">
+    <div class="nav-inner">
+      <a href="#top" class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none"><path d="M4 6.5 12 3l8 3.5v11L12 21l-8-3.5v-11Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M4 6.5 12 10l8-3.5M12 10v11" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+        </span>
+        <span class="brand-name">FirestoreRestDocuments</span>
+      </a>
+      <nav class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#styles">API Styles</a>
+        <a href="#code">Code</a>
+        <a href="#cli">CLI</a>
+        <a href="#mcp">MCP</a>
+        <a href="#install">Install</a>
+      </nav>
+      <div class="nav-actions">
+        <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">
+          <svg class="icon-sun" viewBox="0 0 24 24" width="18" height="18" fill="none"><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.6"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <svg class="icon-moon" viewBox="0 0 24 24" width="18" height="18" fill="none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+        </button>
+        <a class="btn btn-ghost" href="https://github.com/ratnesh-jain/FirestoreRestDocuments" target="_blank" rel="noopener">GitHub</a>
+        <button class="nav-toggle" id="navToggle" aria-label="Menu" aria-expanded="false">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+      <div class="nav-mobile" id="navMobile">
+        <a href="#features">Features</a>
+        <a href="#styles">API Styles</a>
+        <a href="#code">Code</a>
+        <a href="#cli">CLI</a>
+        <a href="#mcp">MCP</a>
+        <a href="#install">Install</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="top">
+    <!-- Hero -->
+    <section class="hero">
+      <div class="hero-bg" aria-hidden="true">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+        <div class="grid-mesh"></div>
+      </div>
+      <div class="hero-inner">
+        <div class="hero-copy">
+          <div class="eyebrow reveal">
+            <span class="eyebrow-dot"></span>
+            Swift Package · No Firebase SDK
+          </div>
+          <h1 class="hero-title reveal">
+            Firestore documents,<br/>
+            <span class="gradient-text">decoded into Swift.</span>
+          </h1>
+          <p class="hero-sub reveal">
+            Parse Firestore REST API responses directly into native <code>Decodable</code> types.
+            Unified async API, property wrappers, encoding, writes, a CLI, and an MCP server —
+            all without the Firebase SDK.<br/>
+            Ideal for <strong>Swift on Server</strong> projects, where the Firebase SDK
+            isn't available.
+          </p>
+          <div class="hero-ctas reveal">
+            <a class="btn btn-primary" href="#install">
+              Get started
+              <svg viewBox="0 0 16 16" width="14" height="14" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </a>
+            <a class="btn btn-secondary" href="https://github.com/ratnesh-jain/FirestoreRestDocuments" target="_blank" rel="noopener">
+              View on GitHub
+            </a>
+          </div>
+          <div class="hero-meta reveal">
+            <span><strong>Swift 6</strong> ready</span>
+            <span class="dot">·</span>
+            <span><strong>SPM</strong> native</span>
+            <span class="dot">·</span>
+            <span><strong>Apache 2.0</strong></span>
+          </div>
+        </div>
+
+        <div class="hero-visual reveal">
+          <div class="doc-card doc-card-back">
+            <div class="doc-card-head">
+              <span class="traffic"><i></i><i></i><i></i></span>
+              <span class="doc-label">Firestore REST</span>
+            </div>
+            <pre class="code"><code><span class="tok-punct">{</span>
+  <span class="tok-key">"fields"</span><span class="tok-punct">:</span> <span class="tok-punct">{</span>
+    <span class="tok-key">"name"</span><span class="tok-punct">:</span> <span class="tok-punct">{</span> <span class="tok-key">"stringValue"</span><span class="tok-punct">:</span> <span class="tok-str">"Alice"</span> <span class="tok-punct">},</span>
+    <span class="tok-key">"age"</span><span class="tok-punct">:</span>  <span class="tok-punct">{</span> <span class="tok-key">"integerValue"</span><span class="tok-punct">:</span> <span class="tok-str">"30"</span> <span class="tok-punct">},</span>
+    <span class="tok-key">"active"</span><span class="tok-punct">:</span><span class="tok-punct">{</span> <span class="tok-key">"booleanValue"</span><span class="tok-punct">:</span> <span class="tok-kw">"true"</span> <span class="tok-punct">}</span>
+  <span class="tok-punct">}</span>
+<span class="tok-punct">}</span></code></pre>
+          </div>
+          <div class="doc-card doc-card-front">
+            <div class="doc-card-head">
+              <span class="traffic"><i></i><i></i><i></i></span>
+              <span class="doc-label">Swift</span>
+            </div>
+            <pre class="code"><code><span class="tok-kw">struct</span> <span class="tok-type">User</span><span class="tok-punct">:</span> <span class="tok-type">Decodable</span> <span class="tok-punct">{</span>
+  <span class="tok-kw">let</span> name<span class="tok-punct">:</span> <span class="tok-type">String</span>
+  <span class="tok-kw">let</span> age<span class="tok-punct">:</span> <span class="tok-type">Int</span>
+  <span class="tok-kw">let</span> active<span class="tok-punct">:</span> <span class="tok-type">Bool</span>
+<span class="tok-punct">}</span>
+
+<span class="tok-kw">let</span> user <span class="tok-punct">=</span> <span class="tok-kw">try</span> parser<span class="tok-punct">.</span>decode<span class="tok-punct">(</span>
+  <span class="tok-type">User</span><span class="tok-punct">.</span><span class="tok-kw">self</span><span class="tok-punct">,</span> from<span class="tok-punct">:</span> json
+<span class="tok-punct">)</span>
+<span class="tok-cmt">// user.name == "Alice"</span></code></pre>
+          </div>
+          <div class="spark spark-1"></div>
+          <div class="spark spark-2"></div>
+          <div class="spark spark-3"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Value types strip -->
+    <section class="strip">
+      <div class="strip-inner">
+        <p class="strip-label">All Firestore value types, handled.</p>
+        <div class="type-grid">
+          <div class="type-chip" style="--c:#0066cc"><span class="type-glyph">Aa</span><span class="type-name">string</span><span class="type-form">"stringValue"</span></div>
+          <div class="type-chip" style="--c:#7c5cff"><span class="type-glyph">42</span><span class="type-name">integer</span><span class="type-form">"integerValue"</span></div>
+          <div class="type-chip" style="--c:#ff9a3c"><span class="type-glyph">3.14</span><span class="type-name">double</span><span class="type-form">"doubleValue"</span></div>
+          <div class="type-chip" style="--c:#34c759"><span class="type-glyph">✓</span><span class="type-name">boolean</span><span class="type-form">"booleanValue"</span></div>
+          <div class="type-chip" style="--c:#ff6b9d"><span class="type-glyph">{}</span><span class="type-name">map</span><span class="type-form">"mapValue"</span></div>
+          <div class="type-chip" style="--c:#00c7be"><span class="type-glyph">[]</span><span class="type-name">array</span><span class="type-form">"arrayValue"</span></div>
+          <div class="type-chip" style="--c:#2997ff"><span class="type-glyph">⏱</span><span class="type-name">timestamp</span><span class="type-form">"timestampValue"</span></div>
+          <div class="type-chip" style="--c:#af52de"><span class="type-glyph">📍</span><span class="type-name">geo point</span><span class="type-form">"geoPointValue"</span></div>
+          <div class="type-chip" style="--c:#ff375f"><span class="type-glyph">→</span><span class="type-name">reference</span><span class="type-form">"referenceValue"</span></div>
+          <div class="type-chip" style="--c:#8e8e93"><span class="type-glyph">0x</span><span class="type-name">bytes</span><span class="type-form">"bytesValue"</span></div>
+          <div class="type-chip" style="--c:#636366"><span class="type-glyph">∅</span><span class="type-name">null</span><span class="type-form">"nullValue"</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Features -->
+    <section id="features" class="section">
+      <div class="section-inner">
+        <div class="section-head reveal">
+          <h2>Everything you need to talk to Firestore over REST.</h2>
+          <p>From a single decode to a full batch write — the library covers the REST surface area you actually use.</p>
+        </div>
+        <div class="feature-grid">
+          <article class="feature reveal">
+            <div class="feature-icon" data-icon="decode">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M7 8 3 12l4 4M17 8l4 4-4 4M14 4l-4 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <h3>Unified async API</h3>
+            <p>Configure once, then <code>db.decode(User.self, from: "users/user1")</code>. Handles URL building, auth, networking, and decoding in one call.</p>
+          </article>
+          <article class="feature reveal">
+            <div class="feature-icon" data-icon="parse">
+              <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M7 9h10M7 13h6M7 17h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </div>
+            <h3>Local parsing only</h3>
+            <p><code>FirestoreDocumentParser</code> parses JSON you already fetched — no networking, perfect for tests and cached payloads.</p>
+          </article>
+          <article class="feature reveal">
+            <div class="feature-icon" data-icon="decoder">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h10M4 17h16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="19" cy="12" r="2" fill="currentColor"/></svg>
+            </div>
+            <h3>JSONDecoder extension</h3>
+            <p>Normalize Firestore JSON to flat JSON, then decode with a standard <code>JSONDecoder</code>. Bring your own date/data strategies.</p>
+          </article>
+          <article class="feature reveal">
+            <div class="feature-icon" data-icon="di">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M12 3v18M3 12h18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.6"/></svg>
+            </div>
+            <h3>swift-dependencies</h3>
+            <p>Protocol-based <code>FirestoreClient</code> with live and mock implementations, registered as <code>@Dependency</code> for clean DI and testing.</p>
+          </article>
+          <article class="feature reveal">
+            <div class="feature-icon" data-icon="wrapper">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M5 5h14v14H5z" stroke="currentColor" stroke-width="1.6" rx="2"/><path d="M9 9h6M9 13h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </div>
+            <h3>Property wrappers</h3>
+            <p><code>@DocumentID</code>, <code>@ServerTimestamp</code>, <code>@ExplicitNull</code> — the same API as the Firebase iOS SDK.</p>
+          </article>
+          <article class="feature reveal">
+            <div class="feature-icon" data-icon="encode">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M4 12h4l2-6 4 12 2-6h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <h3>Encoding</h3>
+            <p>Encode Swift models back to the Firestore REST wire format — full documents or fields-only for merging.</p>
+          </article>
+          <article class="feature reveal">
+            <div class="feature-icon" data-icon="write">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M4 20h4l10-10-4-4L4 16v4Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M14 6l4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </div>
+            <h3>Write operations</h3>
+            <p><code>commit</code>, <code>batchWrite</code>, <code>batchGet</code>, and a <code>FirestoreBatch</code> builder for create / update / delete.</p>
+          </article>
+          <article class="feature reveal">
+            <div class="feature-icon" data-icon="auth">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M12 3l8 4v5c0 4.5-3.4 8.4-8 9-4.6-.6-8-4.5-8-9V7l8-4Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <h3>Service account auth</h3>
+            <p>Mint and auto-refresh OAuth2 tokens from a service account JSON key. Custom providers supported.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- API styles -->
+    <section id="styles" class="section section-alt">
+      <div class="section-inner">
+        <div class="section-head reveal">
+          <h2>Four API styles. Pick what fits.</h2>
+          <p>The same library, four ergonomics — from a zero-config parser to full dependency injection.</p>
+        </div>
+        <div class="styles-grid">
+          <div class="style-card reveal">
+            <div class="style-num">01</div>
+            <h3>FirestoreDocument</h3>
+            <p class="style-desc">Unified async API. Configure once, then read and write in one call.</p>
+            <pre class="code style-code"><code><span class="tok-kw">let</span> db <span class="tok-punct">=</span> <span class="tok-type">FirestoreDocument</span><span class="tok-punct">(</span>config<span class="tok-punct">:</span> config<span class="tok-punct">)</span>
+<span class="tok-kw">let</span> user <span class="tok-punct">=</span> <span class="tok-kw">try</span> <span class="tok-kw">await</span> db<span class="tok-punct">.</span>decode<span class="tok-punct">(</span>
+  <span class="tok-type">User</span><span class="tok-punct">.</span><span class="tok-kw">self</span><span class="tok-punct">,</span> from<span class="tok-punct">:</span> <span class="tok-str">"users/user1"</span>
+<span class="tok-punct">)</span></code></pre>
+          </div>
+          <div class="style-card reveal">
+            <div class="style-num">02</div>
+            <h3>FirestoreDocumentParser</h3>
+            <p class="style-desc">Local parsing only — no networking. Great for tests and cached data.</p>
+            <pre class="code style-code"><code><span class="tok-kw">let</span> parser <span class="tok-punct">=</span> <span class="tok-type">FirestoreDocumentParser</span><span class="tok-punct">()</span>
+<span class="tok-kw">let</span> user <span class="tok-punct">=</span> <span class="tok-kw">try</span> parser<span class="tok-punct">.</span>decode<span class="tok-punct">(</span>
+  <span class="tok-type">User</span><span class="tok-punct">.</span><span class="tok-kw">self</span><span class="tok-punct">,</span> from<span class="tok-punct">:</span> jsonData
+<span class="tok-punct">)</span></code></pre>
+          </div>
+          <div class="style-card reveal">
+            <div class="style-num">03</div>
+            <h3>JSONDecoder.firestoreDecode</h3>
+            <p class="style-desc">Normalizer plus a standard JSONDecoder. Bring your own strategies.</p>
+            <pre class="code style-code"><code><span class="tok-kw">let</span> decoder <span class="tok-punct">=</span> <span class="tok-type">JSONDecoder</span><span class="tok-punct">()</span>
+decoder<span class="tok-punct">.</span>dateDecodingStrategy <span class="tok-punct">=</span> <span class="tok-punct">.</span>iso8601
+<span class="tok-kw">let</span> user <span class="tok-punct">=</span> <span class="tok-kw">try</span> decoder<span class="tok-punct">.</span>firestoreDecode<span class="tok-punct">(</span>
+  <span class="tok-type">User</span><span class="tok-punct">.</span><span class="tok-kw">self</span><span class="tok-punct">,</span> from<span class="tok-punct">:</span> data
+<span class="tok-punct">)</span></code></pre>
+          </div>
+          <div class="style-card reveal">
+            <div class="style-num">04</div>
+            <h3>@Dependency(\.firestoreClient)</h3>
+            <p class="style-desc">swift-dependencies integration for DI and testing with a mock client.</p>
+            <pre class="code style-code"><code><span class="tok-kw">@Dependency</span><span class="tok-punct">(</span>\.firestoreClient<span class="tok-punct">)</span> <span class="tok-kw">var</span> client
+<span class="tok-kw">let</span> users <span class="tok-punct">=</span> <span class="tok-kw">try</span> <span class="tok-kw">await</span> client<span class="tok-punct">.</span>decode<span class="tok-punct">(</span>
+  <span class="tok-punct">[</span><span class="tok-type">User</span><span class="tok-punct">].</span><span class="tok-kw">self</span><span class="tok-punct">,</span> from<span class="tok-punct">:</span> <span class="tok-str">"users"</span>
+<span class="tok-punct">)</span></code></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Code showcase -->
+    <section id="code" class="section">
+      <div class="section-inner">
+        <div class="section-head reveal">
+          <h2>Decode, write, batch — in a few lines.</h2>
+          <p>Property wrappers work out of the box, just like the Firebase iOS SDK.</p>
+        </div>
+        <div class="zigzag">
+          <div class="zigzag-row reveal">
+            <div class="zigzag-text">
+              <span class="code-step-kicker">01 — Decode</span>
+              <h3>Decode a document in one call.</h3>
+              <p>Property wrappers work out of the box — <code>@DocumentID</code>, <code>@ServerTimestamp</code>, <code>@ExplicitNull</code> — the same API as the Firebase iOS SDK. Configure once, then read a collection or a single document.</p>
+            </div>
+            <div class="zigzag-code">
+              <div class="code-window static">
+                <div class="code-window-head">
+                  <span class="traffic"><i></i><i></i><i></i></span>
+                  <span class="doc-label">Decode</span>
+                </div>
+                <pre class="code big"><code><span class="tok-kw">import</span> FirestoreRestDocuments
+
+<span class="tok-kw">struct</span> <span class="tok-type">User</span><span class="tok-punct">:</span> <span class="tok-type">Decodable</span> <span class="tok-punct">{</span>
+  <span class="tok-kw">@DocumentID</span> <span class="tok-kw">var</span> id<span class="tok-punct">:</span> <span class="tok-type">String</span><span class="tok-punct">?</span>
+  <span class="tok-kw">let</span> name<span class="tok-punct">:</span> <span class="tok-type">String</span>
+  <span class="tok-kw">let</span> age<span class="tok-punct">:</span> <span class="tok-type">Int</span>
+  <span class="tok-kw">@ServerTimestamp</span> <span class="tok-kw">var</span> createdAt<span class="tok-punct">:</span> <span class="tok-type">Date</span><span class="tok-punct">?</span>
+<span class="tok-punct">}</span>
+
+<span class="tok-kw">let</span> db <span class="tok-punct">=</span> <span class="tok-type">FirestoreDocument</span><span class="tok-punct">(</span>config<span class="tok-punct">:</span> config<span class="tok-punct">)</span>
+<span class="tok-kw">let</span> user <span class="tok-punct">=</span> <span class="tok-kw">try</span> <span class="tok-kw">await</span> db<span class="tok-punct">.</span>decode<span class="tok-punct">(</span><span class="tok-type">User</span><span class="tok-punct">.</span><span class="tok-kw">self</span><span class="tok-punct">,</span> from<span class="tok-punct">:</span> <span class="tok-str">"users/user1"</span><span class="tok-punct">)</span>
+<span class="tok-kw">let</span> users <span class="tok-punct">=</span> <span class="tok-kw">try</span> <span class="tok-kw">await</span> db<span class="tok-punct">.</span>decode<span class="tok-punct">([</span><span class="tok-type">User</span><span class="tok-punct">].</span><span class="tok-kw">self</span><span class="tok-punct">,</span> from<span class="tok-punct">:</span> <span class="tok-str">"users"</span><span class="tok-punct">)</span></code></pre>
+              </div>
+            </div>
+          </div>
+
+          <div class="zigzag-row zigzag-row--reverse reveal">
+            <div class="zigzag-text">
+              <span class="code-step-kicker">02 — Write</span>
+              <h3>Create, update, delete — with field masks.</h3>
+              <p>Send <code>commit</code> or <code>batchWrite</code> with preconditions. <code>create</code> fails if the document exists; <code>update</code> upserts when no mask is given.</p>
+            </div>
+            <div class="zigzag-code">
+              <div class="code-window static">
+                <div class="code-window-head">
+                  <span class="traffic"><i></i><i></i><i></i></span>
+                  <span class="doc-label">Write</span>
+                </div>
+                <pre class="code big"><code><span class="tok-kw">let</span> db <span class="tok-punct">=</span> <span class="tok-type">FirestoreDocument</span><span class="tok-punct">(</span>config<span class="tok-punct">:</span> config<span class="tok-punct">)</span>
+
+<span class="tok-cmt">// Create (fails if it already exists)</span>
+<span class="tok-kw">let</span> write <span class="tok-punct">=</span> <span class="tok-kw">try</span> <span class="tok-type">FirestoreWrite</span><span class="tok-punct">.</span>create<span class="tok-punct">(</span>newUser<span class="tok-punct">,</span> at<span class="tok-punct">:</span> <span class="tok-str">"users/new-user"</span><span class="tok-punct">)</span>
+_ <span class="tok-punct">=</span> <span class="tok-kw">try</span> <span class="tok-kw">await</span> db<span class="tok-punct">.</span>commit<span class="tok-punct">(</span>writes<span class="tok-punct">:</span> <span class="tok-punct">[</span>write<span class="tok-punct">])</span>
+
+<span class="tok-cmt">// Update with a field mask</span>
+<span class="tok-kw">let</span> update <span class="tok-punct">=</span> <span class="tok-kw">try</span> <span class="tok-type">FirestoreWrite</span><span class="tok-punct">.</span>update<span class="tok-punct">(</span>user<span class="tok-punct">,</span> at<span class="tok-punct">:</span> <span class="tok-str">"users/abc123"</span><span class="tok-punct">,</span> updateMask<span class="tok-punct">:</span> <span class="tok-punct">[</span><span class="tok-str">"email"</span><span class="tok-punct">])</span>
+_ <span class="tok-punct">=</span> <span class="tok-kw">try</span> <span class="tok-kw">await</span> db<span class="tok-punct">.</span>commit<span class="tok-punct">(</span>writes<span class="tok-punct">:</span> <span class="tok-punct">[</span>update<span class="tok-punct">])</span>
+
+<span class="tok-cmt">// Delete</span>
+_ <span class="tok-punct">=</span> <span class="tok-kw">try</span> <span class="tok-kw">await</span> db<span class="tok-punct">.</span>commit<span class="tok-punct">(</span>writes<span class="tok-punct">:</span> <span class="tok-punct">[.</span>delete<span class="tok-punct">(</span>at<span class="tok-punct">:</span> <span class="tok-str">"users/abc123"</span><span class="tok-punct">)])</span></code></pre>
+              </div>
+            </div>
+          </div>
+
+          <div class="zigzag-row reveal">
+            <div class="zigzag-text">
+              <span class="code-step-kicker">03 — Batch</span>
+              <h3>Group writes into one atomic commit.</h3>
+              <p>Build a <code>FirestoreBatch</code> of creates, updates, and deletes — or use <code>batchWrite</code> for per-write status reporting and labels.</p>
+            </div>
+            <div class="zigzag-code">
+              <div class="code-window static">
+                <div class="code-window-head">
+                  <span class="traffic"><i></i><i></i><i></i></span>
+                  <span class="doc-label">Batch</span>
+                </div>
+                <pre class="code big"><code><span class="tok-kw">var</span> batch <span class="tok-punct">=</span> <span class="tok-type">FirestoreBatch</span><span class="tok-punct">()</span>
+<span class="tok-kw">try</span> batch<span class="tok-punct">.</span>create<span class="tok-punct">(</span>newUser<span class="tok-punct">,</span> at<span class="tok-punct">:</span> <span class="tok-str">"users/new"</span><span class="tok-punct">)</span>
+<span class="tok-kw">try</span> batch<span class="tok-punct">.</span>update<span class="tok-punct">(</span>user<span class="tok-punct">,</span> at<span class="tok-punct">:</span> <span class="tok-str">"users/existing"</span><span class="tok-punct">,</span> updateMask<span class="tok-punct">:</span> <span class="tok-punct">[</span><span class="tok-str">"email"</span><span class="tok-punct">])</span>
+batch<span class="tok-punct">.</span>delete<span class="tok-punct">(</span>at<span class="tok-punct">:</span> <span class="tok-str">"users/old"</span><span class="tok-punct">)</span>
+<span class="tok-kw">let</span> result <span class="tok-punct">=</span> <span class="tok-kw">try</span> <span class="tok-kw">await</span> batch<span class="tok-punct">.</span>commit<span class="tok-punct">(</span>using<span class="tok-punct">:</span> db<span class="tok-punct">)</span>
+
+<span class="tok-cmt">// Or non-transactional:</span>
+<span class="tok-kw">let</span> response <span class="tok-punct">=</span> <span class="tok-kw">try</span> <span class="tok-kw">await</span> db<span class="tok-punct">.</span>batchWrite<span class="tok-punct">(</span>writes<span class="tok-punct">:</span> writes<span class="tok-punct">,</span> labels<span class="tok-punct">:</span> <span class="tok-punct">[</span><span class="tok-str">"env"</span><span class="tok-punct">:</span> <span class="tok-str">"prod"</span><span class="tok-punct">])</span></code></pre>
+              </div>
+            </div>
+          </div>
+
+          <div class="zigzag-row zigzag-row--reverse reveal">
+            <div class="zigzag-text">
+              <span class="code-step-kicker">04 — Wrappers</span>
+              <h3>Property wrappers, just like Firebase.</h3>
+              <p><code>@DocumentID</code> populates from the document name, <code>@ServerTimestamp</code> decodes as <code>Date</code>, and <code>@ExplicitNull</code> keeps nil fields as explicit nulls.</p>
+            </div>
+            <div class="zigzag-code">
+              <div class="code-window static">
+                <div class="code-window-head">
+                  <span class="traffic"><i></i><i></i><i></i></span>
+                  <span class="doc-label">Wrappers</span>
+                </div>
+                <pre class="code big"><code><span class="tok-kw">struct</span> <span class="tok-type">Item</span><span class="tok-punct">:</span> <span class="tok-type">Codable</span> <span class="tok-punct">{</span>
+  <span class="tok-kw">let</span> name<span class="tok-punct">:</span> <span class="tok-type">String</span>
+  <span class="tok-kw">@ServerTimestamp</span> <span class="tok-kw">var</span> createdAt<span class="tok-punct">:</span> <span class="tok-type">Date</span><span class="tok-punct">?</span>
+  <span class="tok-kw">@ExplicitNull</span> <span class="tok-kw">var</span> nickname<span class="tok-punct">:</span> <span class="tok-type">String</span><span class="tok-punct">?</span>
+<span class="tok-punct">}</span>
+
+<span class="tok-kw">struct</span> <span class="tok-type">User</span><span class="tok-punct">:</span> <span class="tok-type">Decodable</span> <span class="tok-punct">{</span>
+  <span class="tok-kw">@DocumentID</span> <span class="tok-kw">var</span> id<span class="tok-punct">:</span> <span class="tok-type">String</span><span class="tok-punct">?</span>
+  <span class="tok-kw">let</span> name<span class="tok-punct">:</span> <span class="tok-type">String</span>
+  <span class="tok-kw">let</span> email<span class="tok-punct">:</span> <span class="tok-type">String</span>
+<span class="tok-punct">}</span></code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Layers / architecture -->
+    <section class="section section-alt">
+      <div class="section-inner">
+        <div class="section-head reveal">
+          <h2>Five layers, one pipeline.</h2>
+          <p>Each layer is optional — use the one that fits your app.</p>
+        </div>
+        <div class="layers">
+          <div class="layer reveal"><span class="layer-num">1</span><div><h4>Normalizer</h4><p>Unwraps <code>{"stringValue":"Alice"}</code> → <code>"Alice"</code>, then hands flat JSON to <code>JSONDecoder</code>.</p></div></div>
+          <div class="layer reveal"><span class="layer-num">2</span><div><h4>Custom Decoder / Encoder</h4><p>Implements Swift's <code>Decoder</code>/<code>Encoder</code> directly on the <code>FirestoreValue</code> tree. Handles <code>Date</code>, <code>Data</code>, <code>GeoPoint</code> and wrappers natively.</p></div></div>
+          <div class="layer reveal"><span class="layer-num">3</span><div><h4>Unified API</h4><p><code>FirestoreDocument</code> combines URL construction, auth, async networking, and decoding into one call.</p></div></div>
+          <div class="layer reveal"><span class="layer-num">4</span><div><h4>Dependencies</h4><p>Protocol-based <code>FirestoreClient</code> with live and mock implementations, registered as <code>@Dependency</code> values.</p></div></div>
+          <div class="layer reveal"><span class="layer-num">5</span><div><h4>CLI + MCP</h4><p><code>frd</code> wraps the unified API; <code>frd-mcp</code> exposes read-only tools over stdio.</p></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CLI -->
+    <section id="cli" class="section">
+      <div class="section-inner cli-section">
+        <div class="cli-copy reveal">
+          <h2>A CLI for your terminal and scripts.</h2>
+          <p><code>frd</code> brings the same REST operations to the shell — read, write, delete, batch, and list, with environment-based credentials.</p>
+          <ul class="cli-list">
+            <li><code>frd get users/alice</code> — fetch one document</li>
+            <li><code>frd list users --all</code> — list a collection</li>
+            <li><code>frd set users/alice --data '{"name":"Alice"}'</code></li>
+            <li><code>frd delete users/alice users/bob</code></li>
+            <li><code>frd batch-write --file ops.json</code></li>
+          </ul>
+          <a class="btn btn-primary" href="#install" data-install-tab="cli">Install the CLI</a>
+        </div>
+        <div class="terminal reveal" aria-hidden="true">
+          <div class="terminal-head">
+            <span class="traffic"><i></i><i></i><i></i></span>
+            <span class="terminal-title">zsh — frd</span>
+          </div>
+          <pre class="terminal-body"><code><span class="t-prompt">$</span> frd get users/alice --project my-project
+{
+  "name": "Alice",
+  "age": 30,
+  "active": true
+}
+
+<span class="t-prompt">$</span> frd list users --limit 2 --compact
+[{"id":"alice","data":{"name":"Alice"}},{"id":"bob","data":{"name":"Bob"}}]
+
+<span class="t-prompt">$</span> frd set users/carol --project p --data '{"name":"Carol","age":28}'
+users/carol</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- MCP -->
+    <section id="mcp" class="section section-alt">
+      <div class="section-inner mcp-section">
+        <div class="mcp-visual reveal" aria-hidden="true">
+          <div class="mcp-node mcp-client">
+            <span>MCP Client</span>
+            <small>Claude · Cursor · Code</small>
+          </div>
+          <div class="mcp-node mcp-server">
+            <span>frd-mcp</span>
+            <small>stdio · read-only</small>
+          </div>
+          <div class="mcp-node mcp-fs">
+            <span>Firestore REST</span>
+            <small>documents · collections</small>
+          </div>
+          <svg class="mcp-connections" aria-hidden="true" preserveAspectRatio="none"></svg>
+        </div>
+        <div class="mcp-copy reveal">
+          <h2>Read-only MCP server out of the box.</h2>
+          <p><code>frd-mcp</code> exposes Firestore operations as MCP tools over stdio — plug it into Claude Desktop, Claude Code, or Cursor and ask questions in natural language.</p>
+          <div class="mcp-tools">
+            <span class="mcp-tool">firestore_get_document</span>
+            <span class="mcp-tool">firestore_list_documents</span>
+            <span class="mcp-tool">firestore_list_collections</span>
+          </div>
+          <p class="mcp-note">Credentials come from the environment, never from tool arguments. Writes are intentionally excluded.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Install -->
+    <section id="install" class="section">
+      <div class="section-inner install-section">
+        <div class="section-head reveal">
+          <h2>Install in seconds.</h2>
+          <p>Add the package to your <code>Package.swift</code> dependencies.</p>
+        </div>
+        <div class="install-card reveal">
+          <div class="install-tabs">
+            <button class="tab active" data-install="spm">Swift Package Manager</button>
+            <button class="tab" data-install="xcode">Xcode</button>
+            <button class="tab" data-install="cli">CLI binary</button>
+          </div>
+          <div class="install-panel active" data-install-panel="spm">
+            <pre class="code"><code><span class="tok-key">dependencies</span><span class="tok-punct">:</span> <span class="tok-punct">[</span>
+  <span class="tok-punct">.</span><span class="tok-type">package</span><span class="tok-punct">(</span>
+    url<span class="tok-punct">:</span> <span class="tok-str">"https://github.com/ratnesh-jain/FirestoreRestDocuments.git"</span><span class="tok-punct">,</span>
+    from<span class="tok-punct">:</span> <span class="tok-str">"0.1.0"</span>
+  <span class="tok-punct">)</span>
+<span class="tok-punct">]</span></code></pre>
+          </div>
+          <div class="install-panel" data-install-panel="xcode">
+            <pre class="code"><code>File → Add Package Dependencies…
+paste<span class="tok-punct">:</span> <span class="tok-str">https://github.com/ratnesh-jain/FirestoreRestDocuments.git</span></code></pre>
+          </div>
+          <div class="install-panel" data-install-panel="cli">
+            <pre class="code"><code><span class="tok-kw">swift</span> build <span class="tok-punct">-</span>c release
+<span class="tok-punct">.</span>build/release/frd <span class="tok-punct">--</span>help
+<span class="tok-punct">.</span>build/release/frd<span class="tok-punct">-</span>mcp   <span class="tok-cmt"># MCP server</span></code></pre>
+          </div>
+        </div>
+        <div class="products reveal">
+          <div class="product">
+            <h4>FirestoreRestDocuments</h4>
+            <p>Base library. Depends on swift-log and swift-crypto.</p>
+          </div>
+          <div class="product">
+            <h4>FirestoreRestDocumentsDependencies</h4>
+            <p>Adds swift-dependencies integration and a mock client.</p>
+          </div>
+          <div class="product">
+            <h4>frd</h4>
+            <p>Command-line executable for reading and writing documents.</p>
+          </div>
+          <div class="product">
+            <h4>frd-mcp</h4>
+            <p>Read-only MCP server executable over stdio.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none"><path d="M4 6.5 12 3l8 3.5v11L12 21l-8-3.5v-11Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M4 6.5 12 10l8-3.5M12 10v11" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+        </span>
+        <span>FirestoreRestDocuments</span>
+      </div>
+      <p class="footer-note">Apache 2.0 · Built with Swift 6 · Hosted on GitHub Pages</p>
+      <div class="footer-links">
+        <a href="https://github.com/ratnesh-jain/FirestoreRestDocuments">GitHub</a>
+        <a href="https://github.com/ratnesh-jain/FirestoreRestDocuments/blob/main/README.md">README</a>
+        <a href="https://github.com/ratnesh-jain/FirestoreRestDocuments/issues">Issues</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="main.js"></script>
+</body>
+</html>
