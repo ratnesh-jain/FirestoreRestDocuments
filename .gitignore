@@ -27,3 +27,6 @@ xcuserdata/
 build/
 Pods/
 Package.resolved
+
+# Swift Package Manager Xcode state
+.swiftpm/

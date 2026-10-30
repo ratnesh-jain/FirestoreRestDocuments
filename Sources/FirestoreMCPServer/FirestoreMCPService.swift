@@ -206,14 +206,14 @@ public enum FirestoreMCPService {
     let text = String(data: data, encoding: .utf8) ?? "{}"
     let structured = try? JSONDecoder().decode(Value.self, from: data)
     return CallTool.Result(
-      content: [.text(text: text)],
+        content: [.text(text: text, annotations: nil, _meta: nil)],
       structuredContent: structured,
       isError: false
     )
   }
 
   private static func failure(_ message: String) -> CallTool.Result {
-    CallTool.Result(content: [.text(text: message)], isError: true)
+    CallTool.Result(content: [.text(text: message, annotations: nil, _meta: nil)], isError: true)
   }
 
   private static func message(for error: Error) -> String {
