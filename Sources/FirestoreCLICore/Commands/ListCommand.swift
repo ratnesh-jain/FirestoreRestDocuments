@@ -1,3 +1,4 @@
+import FirestoreOperations
 import ArgumentParser
 import Foundation
 import FirestoreRestDocuments
@@ -93,22 +94,7 @@ struct ListCommand: AsyncParsableCommand {
       return
     }
 
-    let items: [[String: Any]] = try documents.map { document in
-      var item: [String: Any] = [:]
-      if let name = document["name"] as? String {
-        item["id"] = FirestorePath.documentID(fromFullName: name)
-        item["name"] = name
-      }
-      if let createTime = document["createTime"] as? String {
-        item["createTime"] = createTime
-      }
-      if let updateTime = document["updateTime"] as? String {
-        item["updateTime"] = updateTime
-      }
-      let fields = document["fields"] as? [String: Any] ?? [:]
-      item["data"] = try DocumentPayload.normalizedFields(fields)
-      return item
-    }
+    let items: [[String: Any]] = try documents.map { try DocumentPayload.summary(fromWireDocument: $0) }
     try context.writeJSON(items)
   }
 

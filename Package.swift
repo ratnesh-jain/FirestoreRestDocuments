@@ -4,11 +4,12 @@ import PackageDescription
 let package = Package(
   name: "FirestoreRestDocuments",
   platforms: [
-    .macOS(.v10_15),
-    .iOS(.v13),
-    .tvOS(.v13),
-    .watchOS(.v7),
-    .macCatalyst(.v13),
+    .macOS(.v13),
+    .iOS(.v16),
+    .tvOS(.v16),
+    .watchOS(.v9),
+    .macCatalyst(.v16),
+    .visionOS(.v1),
   ],
   products: [
     .library(
@@ -23,11 +24,19 @@ let package = Package(
       name: "frd",
       targets: ["FirestoreCLI"]
     ),
+    .library(
+      name: "FirestoreMCPServer",
+      targets: ["FirestoreMCPServer"]
+    ),
   ],
   dependencies: [
     .package(
       url: "https://github.com/apple/swift-argument-parser",
       from: "1.5.0"
+    ),
+    .package(
+      url: "https://github.com/modelcontextprotocol/swift-sdk.git",
+      from: "0.11.0"
     ),
     .package(
       url: "https://github.com/pointfreeco/swift-dependencies",
@@ -59,9 +68,17 @@ let package = Package(
       ]
     ),
     .target(
+      name: "FirestoreOperations",
+      dependencies: [
+        "FirestoreRestDocuments",
+        .product(name: "Logging", package: "swift-log"),
+      ]
+    ),
+    .target(
       name: "FirestoreCLICore",
       dependencies: [
         "FirestoreRestDocuments",
+        "FirestoreOperations",
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
         .product(name: "Logging", package: "swift-log"),
       ]
@@ -69,6 +86,19 @@ let package = Package(
     .executableTarget(
       name: "FirestoreCLI",
       dependencies: ["FirestoreCLICore"]
+    ),
+    .target(
+      name: "FirestoreMCPServer",
+      dependencies: [
+        "FirestoreRestDocuments",
+        "FirestoreOperations",
+        .product(name: "MCP", package: "swift-sdk"),
+        .product(name: "Logging", package: "swift-log"),
+      ]
+    ),
+    .executableTarget(
+      name: "FirestoreMCP",
+      dependencies: ["FirestoreMCPServer", "FirestoreOperations"]
     ),
     .testTarget(
       name: "FirestoreRestDocumentsTests",
@@ -82,8 +112,18 @@ let package = Package(
       name: "FirestoreCLICoreTests",
       dependencies: [
         "FirestoreCLICore",
+        "FirestoreOperations",
         "FirestoreRestDocuments",
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
+      ]
+    ),
+    .testTarget(
+      name: "FirestoreMCPServerTests",
+      dependencies: [
+        "FirestoreMCPServer",
+        "FirestoreOperations",
+        "FirestoreRestDocuments",
+        .product(name: "MCP", package: "swift-sdk"),
       ]
     ),
   ]

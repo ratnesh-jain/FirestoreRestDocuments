@@ -1,8 +1,8 @@
-enum PageSizing {
-  static let defaultFollowAllSize = 1000
+public enum PageSizing {
+  public static let defaultFollowAllSize = 1000
 
   /// Page size to request, or nil to keep the server default.
-  static func size(
+  public static func size(
     requested: Int?,
     limit: Int?,
     alreadyFetched: Int,

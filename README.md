@@ -39,6 +39,8 @@ Or add via Xcode: **File → Add Package Dependencies...** → paste the URL.
 | `FirestoreRestDocumentsDependencies` | `import FirestoreRestDocumentsDependencies` | Adds [swift-dependencies](https://github.com/pointfreeco/swift-dependencies) integration |
 | `frd` | — | Command-line executable for reading and writing documents |
 
+| `frd-mcp` | — | Read-only MCP server executable (stdio transport) exposing Firestore tools to MCP clients |
+
 Add the product you need to your target:
 
 ```swift
@@ -623,6 +625,114 @@ cat operations.json | frd batch-write --project p --non-atomic --label env=prod
 - For `update`, the default mask is the provided top-level fields; set `"replace": true` or provide `"mask"` to change that. For `set`, `"mask"` is optional.
 - `"exists": true/false` adds a precondition to `set`/`update` operations.
 - An object with a `"writes"` array is also accepted instead of a bare array.
+
+## MCP Server
+
+The package also ships a read-only [Model Context Protocol](https://modelcontextprotocol.io/) server, `frd-mcp`, that exposes Firestore operations as MCP tools over stdio. It is intended for use with MCP clients (Claude Desktop, Claude Code, Cursor, etc.).
+
+```bash
+# Build a standalone binary
+swift build -c release --product frd-mcp
+
+# Run directly (requires environment variables; see Authentication)
+FIRESTORE_PROJECT_ID=my-project FIRESTORE_ACCESS_TOKEN="$(gcloud auth print-access-token)" \\
+  .build/release/frd-mcp
+```
+
+### Tools
+
+| Tool | Description |
+|---|---|
+| `firestore_get_document` | Fetch one document by path (optional comma-separated `mask`). |
+| `firestore_list_documents` | List documents in a collection, with `pageSize` and `pageToken`. |
+| `firestore_list_collections` | List top-level collections, or subcollections when `parent` is given. |
+
+All tools are read-only. Credentials are never accepted as tool arguments; they come from the same environment variables as `frd`.
+
+### Tool arguments
+
+`firestore_get_document`
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `path` | string | yes | Document path, for example `users/alice`. |
+| `mask` | string | no | Comma-separated field paths, for example `name,email`. |
+
+`firestore_list_documents`
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `collection` | string | yes | Collection path, for example `users` or `users/alice/orders`. |
+| `pageSize` | integer | no | Page size (1–1000). |
+| `pageToken` | string | no | Token from a previous response. |
+
+`firestore_list_collections`
+
+| Argument | Type | Required | Description |
+|---|---|---|---|
+| `parent` | string | no | Document path whose subcollections to list; omit for top-level collections. |
+| `pageSize` | integer | no | Page size (1–1000). |
+| `pageToken` | string | no | Token from a previous response. |
+
+### Example prompts
+
+Once configured, you can ask your MCP client things like:
+
+- "List the top-level Firestore collections."
+- "Show the first 10 documents in the `users` collection."
+- "Get the document `users/alice`, but only the `name` and `email` fields."
+- "What subcollections does `users/alice` have?"
+
+Tool results are JSON objects. `firestore_list_documents` and `firestore_list_collections` include `nextPageToken` when more pages are available; pass it back as `pageToken` to continue.
+
+### Client configuration
+
+Example for Claude Desktop (`claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "firestore": {
+      "command": "/path/to/frd-mcp",
+      "env": {
+        "FIRESTORE_PROJECT_ID": "my-project",
+        "FIRESTORE_ACCESS_TOKEN": "ya29...."
+      }
+    }
+  }
+}
+```
+
+Example for Claude Code (`.mcp.json` in your project):
+
+```json
+{
+  "mcpServers": {
+    "firestore": {
+      "command": "/path/to/frd-mcp",
+      "env": {
+        "FIRESTORE_PROJECT_ID": "my-project",
+        "GOOGLE_APPLICATION_CREDENTIALS": "/path/to/service-account.json"
+      }
+    }
+  }
+}
+```
+
+Or build from source with `swift build -c release --product frd-mcp` and point `command` at `.build/release/frd-mcp`.
+
+### Authentication
+
+`frd-mcp` resolves credentials from the environment using the same rules as `frd` (see the environment variable table above). `FIRESTORE_PROJECT_ID` (or `GOOGLE_CLOUD_PROJECT` / `GCLOUD_PROJECT`) and one credential source are required at startup; the server fails fast with an error on stderr if they are missing.
+
+Logs are written to stderr so stdout remains the MCP JSON-RPC channel. Set `FIRESTORE_LOG_LEVEL=debug` (or `info`) to increase verbosity when troubleshooting.
+
+### Troubleshooting
+
+- **Server exits immediately / client shows no tools** — check stderr. Missing project ID or credentials produce a single `frd-mcp: ...` error line.
+- **`401 UNAUTHENTICATED`** — the access token is expired or invalid; mint a new one with `gcloud auth print-access-token`.
+- **Emulator** — set `FIRESTORE_EMULATOR_HOST=localhost:8080` (and a project ID such as `demo`); the server targets the emulator's REST endpoint.
+- **No write tools** — by design this server is read-only; writes are only available through the `frd` CLI.
 
 ## Logging
 
